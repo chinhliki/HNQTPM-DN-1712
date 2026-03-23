@@ -1,0 +1,124 @@
+<odoo>
+    <data>
+        <!-- Form View Quản lý phòng họp -->
+        <record id="view_quan_ly_phong_hop_form" model="ir.ui.view">
+            <field name="name">quan_ly_phong_hop_form</field>
+            <field name="model">quan_ly_phong_hop</field>
+            <field name="arch" type="xml">
+                <form string="📋 Chi tiết Phòng Họp">
+                    <sheet>
+
+                        <group col="2">
+                            <group>
+                                <separator string="🔹 Thông tin chung" colspan="2"/>
+                                <field name="name"/>
+                                <field name="loai_phong"/>
+                                <field name="suc_chua"/>
+                            </group>
+                        </group>
+
+                        <notebook>
+                            <!-- Lịch đặt phòng chỉ hiển thị "Đã duyệt" và "Đang sử dụng" -->
+                            <page string="📅 Lịch đặt phòng">
+                                <field name="lich_dat_phong_ids">
+                                    <tree>
+                                        <field name="nguoi_muon_id" string="👤 Người mượn"/>
+                                        <field name="thoi_gian_muon_du_kien" string="⏳ Mượn dự kiến"/>
+                                        <field name="thoi_gian_tra_du_kien" string="🔄 Trả dự kiến"/>
+                                        <field name="trang_thai" string="📌 Trạng thái"/>
+                                    </tree>
+                                </field>
+                            </page>
+
+                            <!-- Lịch sử mượn trả hiển thị thời gian thực tế -->
+                            <page string="📜 Lịch sử mượn trả">
+                                <field name="lich_su_thay_doi_ids">
+                                    <tree>
+                                        <field name="nguoi_muon_id" string="👤 Người mượn"/>
+                                        <field name="thoi_gian_muon_du_kien" string="📅 Mượn dự kiến"/>
+                                        <field name="thoi_gian_muon_thuc_te" string="⏰ Mượn thực tế"/>
+                                        <field name="thoi_gian_tra_du_kien" string="📆 Trả dự kiến"/>
+                                        <field name="thoi_gian_tra_thuc_te" string="⏱ Trả thực tế"/>
+                                        <field name="trang_thai" string="📌 Trạng thái"/>
+                                    </tree>
+                                </field>
+                            </page>
+                            <page string="🖥️ Thiết bị trong phòng">
+                                <field name="thiet_bi_ids">
+                                    <tree>
+                                        <field name="name" string="📌 Tên thiết bị"/>
+                                        <field name="loai_thiet_bi" string="📦 Loại thiết bị"/>
+                                        <field name="trang_thai" string="🔄 Trạng thái"/>
+                                    </tree>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Tree View Quản lý phòng họp -->
+        <record id="view_quan_ly_phong_hop_tree" model="ir.ui.view">
+            <field name="name">quan_ly_phong_hop_tree</field>
+            <field name="model">quan_ly_phong_hop</field>
+            <field name="arch" type="xml">
+                <tree string="📋 Danh sách Phòng Họp">
+                    <field name="name" string="🏢 Tên phòng"/>
+                    <field name="loai_phong" string="🏷 Loại phòng"/>
+                    <field name="suc_chua" string="👥 Sức chứa"/>
+                    <field name="trang_thai" string="📌 Trạng thái"
+                           decoration-muted="trang_thai=='Trống'"
+                           decoration-success="trang_thai=='Đã mượn'"
+                           decoration-danger="trang_thai=='Đang_sử_dụng'"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Kanban View Quản lý phòng họp -->
+        <record id="view_quan_ly_phong_hop_kanban" model="ir.ui.view">
+            <field name="name">quan_ly_phong_hop_kanban</field>
+            <field name="model">quan_ly_phong_hop</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile">
+                    <field name="name"/>
+                    <field name="loai_phong"/>
+                    <field name="suc_chua"/>
+                    <field name="trang_thai"/>
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div class="oe_kanban_global_click">
+                                <div class="o_kanban_record_top mb4">
+                                    <strong class="o_kanban_record_title" style="font-size: 16px;">
+                                        <i class="fa fa-university"/> <field name="name"/>
+                                    </strong>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left text-muted">
+                                        <i class="fa fa-users"/> Sức chứa: <field name="suc_chua"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <!-- Thêm nhãn (badge) trạng thái nhiều màu xịn xò -->
+                                        <span t-attf-class="badge #{record.trang_thai.raw_value == 'Trống' ? 'badge-success' : (record.trang_thai.raw_value == 'Đang_sử_dụng' ? 'badge-danger' : 'badge-warning')}">
+                                            <field name="trang_thai"/>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+        <!-- Action -->
+        <record id="action_quan_ly_phong_hop" model="ir.actions.act_window">
+            <field name="name">📋 Danh sách phòng họp</field>
+            <field name="res_model">quan_ly_phong_hop</field>
+            <field name="view_mode">kanban,tree,form</field>
+        </record>
+
+        <!-- Menu -->
+        <menuitem id="menu_quan_ly_phong_hop" name="🏢 Quản lý Phòng Họp" action="action_quan_ly_phong_hop"/>
+    </data>
+</odoo>

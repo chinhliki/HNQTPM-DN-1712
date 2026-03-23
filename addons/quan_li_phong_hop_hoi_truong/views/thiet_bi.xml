@@ -1,0 +1,71 @@
+<odoo>
+    <data>
+        <!-- Form View - Thiết bị phòng họp -->
+        <record id="view_thiet_bi_form" model="ir.ui.view">
+            <field name="name">thiet_bi_form</field>
+            <field name="model">thiet_bi</field>
+            <field name="arch" type="xml">
+                <form string="📌 Chi tiết thiết bị">
+                    <sheet>
+                        <group col="2">
+                            <group>
+                                <separator string="🔹 Thông tin thiết bị" colspan="2"/>
+                                <field name="name"/>
+                                <field name="loai_thiet_bi"/>
+                                <field name="phong_id"/>
+                                <field name="trang_thai"/>
+                            </group>
+                            <group>
+                                <separator string="👤 Quản lý thiết bị" colspan="2"/>
+                                <field name="nguoi_quan_ly_id"/>
+                                <field name="mo_ta"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Tree View - Danh sách thiết bị -->
+        <record id="view_thiet_bi_tree" model="ir.ui.view">
+            <field name="name">thiet_bi_tree</field>
+            <field name="model">thiet_bi</field>
+            <field name="arch" type="xml">
+                <tree string="📌 Danh sách thiết bị">
+                    <field name="name"/>
+                    <field name="loai_thiet_bi"/>
+                    <field name="phong_id"/>
+                    <field name="nguoi_quan_ly_id"/>
+                    <field name="trang_thai"
+                           decoration-muted="trang_thai=='san_sang'"
+                           decoration-danger="trang_thai=='hong'"
+                           decoration-warning="trang_thai=='can_bao_tri'"
+                           decoration-success="trang_thai=='dang_su_dung'"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Search View - Bộ lọc tìm kiếm -->
+        <record model="ir.ui.view" id="thiet_bi_search">
+            <field name="model">thiet_bi</field>
+            <field name="arch" type="xml">
+                <search string="🔍 Tìm kiếm thiết bị">
+                    <field name="name"/>
+                    <field name="loai_thiet_bi"/>
+                    <field name="phong_id"/>
+                    <field name="nguoi_quan_ly_id"/>
+                    <field name="trang_thai"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- Action - Quản lý thiết bị -->
+        <record id="action_thiet_bi" model="ir.actions.act_window">
+            <field name="name">📌 Quản lý thiết bị</field>
+            <field name="res_model">thiet_bi</field>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="thiet_bi_search"/>
+        </record>
+
+    </data>
+</odoo>
