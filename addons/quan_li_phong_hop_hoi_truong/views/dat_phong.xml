@@ -50,12 +50,20 @@
                                     </tree>
                                 </field>
                             </page>
-                            <page string="🖥 Thiết Bị &amp; Tài Sản Đi Kèm">
+                            <page string="🖥 Chọn Thiết Bị Mượn">
+                                <field name="chi_tiet_muon_thiet_bi_ids">
+                                    <tree editable="bottom">
+                                        <field name="thiet_bi_id" domain="[('phong_id', '=', parent.phong_id)]" options="{'no_create': True}"/>
+                                        <field name="so_luong_muon"/>
+                                    </tree>
+                                </field>
+                            </page>
+                            <page string="🏢 Thiết Bị &amp; Tài Sản Đi Kèm (Thông tin)">
                                 <field name="thiet_bi_ids">
                                     <tree>
                                         <field name="name" string="Tên thiết bị"/>
                                         <field name="loai_thiet_bi" string="Loại"/>
-                                        <field name="so_luong" string="Số lượng"/>
+                                        <field name="so_luong" string="Số lượng hiện có"/>
                                         <field name="trang_thai" string="Trạng thái"/>
                                     </tree>
                                 </field>
@@ -201,6 +209,15 @@
             <field name="view_mode">tree,form</field>
             <field name="search_view_id" ref="dat_phong_search"/>
             <field name="domain">[("trang_thai", "=", "đã_hủy")]</field>
+        </record>
+
+        <!-- Action - Danh sách Đã trả -->
+        <record id="action_dat_phong_da_tra" model="ir.actions.act_window">
+            <field name="name">📋 Danh sách Đã Trả (Lịch sử mượn)</field>
+            <field name="res_model">dat_phong</field>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="dat_phong_search"/>
+            <field name="domain">[("trang_thai", "=", "đã_trả")]</field>
         </record>
     </data>
 </odoo>

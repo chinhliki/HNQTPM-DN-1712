@@ -36,6 +36,11 @@
                   parent="menu_dat_phong"
                   action="action_dat_phong_da_huy"/>
 
+        <menuitem name="Danh sách đã trả"
+                  id="menu_dat_phong_da_tra"
+                  parent="menu_dat_phong"
+                  action="action_dat_phong_da_tra"/>
+
         <menuitem name="Lịch sử thay đổi" 
                   id="menu_lich_su_thay_doi" 
                   parent="menu_root" 

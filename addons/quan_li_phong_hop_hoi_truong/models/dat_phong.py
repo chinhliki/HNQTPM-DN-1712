@@ -12,6 +12,7 @@ class DatPhong(models.Model):
     phong_id = fields.Many2one("quan_ly_phong_hop", string="Phòng họp", required=True, index=True, ondelete="cascade")
     nguoi_muon_id = fields.Many2one("nhan_vien", string="Người mượn", required=True, index=True)  
     thiet_bi_ids = fields.One2many("thiet_bi", related="phong_id.thiet_bi_ids", string="Thiết bị trong phòng", readonly=True)
+    chi_tiet_muon_thiet_bi_ids = fields.One2many("chi_tiet_muon_thiet_bi", "dat_phong_id", string="Chi tiết thiết bị mượn")
     thoi_gian_muon_du_kien = fields.Datetime(string="Thời gian mượn dự kiến", required=True)
     thoi_gian_muon_thuc_te = fields.Datetime(string="Thời gian mượn thực tế")
     thoi_gian_tra_du_kien = fields.Datetime(string="Thời gian trả dự kiến", required=True)
@@ -161,10 +162,19 @@ class DatPhong(models.Model):
             })
             self.lich_su(record)
             
-            # Mức 2: Tự động hoá - Đổi trạng thái thiết bị sang Đang sử dụng
-            thiet_bi_trong_phong = record.phong_id.thiet_bi_ids.filtered(lambda t: t.trang_thai == 'san_sang')
-            if thiet_bi_trong_phong:
-                thiet_bi_trong_phong.write({'trang_thai': 'dang_su_dung'})
+            # Mức 2: Trừ số lượng thiết bị mượn
+            for chi_tiet in record.chi_tiet_muon_thiet_bi_ids:
+                if chi_tiet.so_luong_muon > chi_tiet.thiet_bi_id.so_luong:
+                    raise ValidationError(f"Thiết bị '{chi_tiet.thiet_bi_id.name}' không đủ số lượng để mượn (hiện còn {chi_tiet.thiet_bi_id.so_luong}).")
+                chi_tiet.thiet_bi_id.so_luong -= chi_tiet.so_luong_muon
+                if chi_tiet.thiet_bi_id.so_luong == 0:
+                    chi_tiet.thiet_bi_id.trang_thai = 'dang_su_dung'
+
+            # Logic cũ nếu không có thiết bị chi tiết
+            if not record.chi_tiet_muon_thiet_bi_ids:
+                thiet_bi_trong_phong = record.phong_id.thiet_bi_ids.filtered(lambda t: t.trang_thai == 'san_sang')
+                if thiet_bi_trong_phong:
+                    thiet_bi_trong_phong.write({'trang_thai': 'dang_su_dung'})
 
     def tra_phong(self):
         for record in self:
@@ -178,10 +188,19 @@ class DatPhong(models.Model):
             })
             self.lich_su(record)
 
-            # Mức 2: Tự động hoá - Trả thiết bị về trạng thái Sẵn sàng
-            thiet_bi_dang_dung = record.phong_id.thiet_bi_ids.filtered(lambda t: t.trang_thai == 'dang_su_dung')
-            if thiet_bi_dang_dung:
-                thiet_bi_dang_dung.write({'trang_thai': 'san_sang'})
+            # Trả số lượng thiết bị
+            for chi_tiet in record.chi_tiet_muon_thiet_bi_ids:
+                chi_tiet.thiet_bi_id.so_luong += chi_tiet.so_luong_muon
+                chi_tiet.thiet_bi_id.trang_thai = 'san_sang'
+
+            # Logic cũ nếu không có thiết bị chi tiết
+            if not record.chi_tiet_muon_thiet_bi_ids:
+                thiet_bi_dang_dung = record.phong_id.thiet_bi_ids.filtered(lambda t: t.trang_thai == 'dang_su_dung')
+                if thiet_bi_dang_dung:
+                    thiet_bi_dang_dung.write({'trang_thai': 'san_sang'})
+                    
+        # Cập nhật bảng dữ liệu lịch sử mượn trả
+        self.env["lich_su_muon_tra"].update_lich_su_muon_tra()
 
     @api.model
     def lich_su(self, record):
@@ -203,9 +222,6 @@ class DatPhong(models.Model):
         # BƯỚC 1: ĐIỀN THÔNG TIN TOKEN VÀ CHAT ID CỦA BẠN VÀO ĐÂY SAU KHI TẠO BOT
         BOT_TOKEN = "8188180715:AAEo8OlO7jw4LHLs_mXWjpKXVjRSDwiv8MU"  # Ví dụ: "123456789:ABCDefghIJKlmnOPQRstuVWXyz"
         CHAT_ID = "8481931785"      # Ví dụ: "-10012345678" hoặc "12345678"
-        
-        if BOT_TOKEN == "8188180715:AAEo8OlO7jw4LHLs_mXWjpKXVjRSDwiv8MU":
-            return  # Nếu chưa điền cấu hình thì bỏ qua để không lỗi
             
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
@@ -220,3 +236,17 @@ class DatPhong(models.Model):
         except requests.exceptions.RequestException as e:
             # Ghi log ẩn thay vì báo lỗi popup để không làm gián đoạn trải nghiệm người dùng Odoo
             pass
+
+class ChiTietMuonThietBi(models.Model):
+    _name = "chi_tiet_muon_thiet_bi"
+    _description = "Chi tiết thiết bị được mượn"
+
+    dat_phong_id = fields.Many2one("dat_phong", string="Đặt phòng", ondelete="cascade")
+    thiet_bi_id = fields.Many2one("thiet_bi", string="Thiết bị", required=True)
+    so_luong_muon = fields.Integer(string="Số lượng mượn", default=1, required=True)
+
+    @api.constrains('so_luong_muon')
+    def _check_so_luong_muon(self):
+        for record in self:
+            if record.so_luong_muon <= 0:
+                raise ValidationError("Số lượng mượn phải lớn hơn 0.")
