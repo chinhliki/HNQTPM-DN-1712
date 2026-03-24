@@ -1,24 +1,46 @@
 <odoo>
     <data>
 
-        <!-- View biểu đồ theo trạng thái -->
+        <!-- View biểu đồ theo trạng thái và phòng họp -->
         <record id="view_dat_phong_graph_by_status" model="ir.ui.view">
             <field name="name">dat.phong.graph.by.status</field>
             <field name="model">dat_phong</field>
             <field name="arch" type="xml">
-                <graph string="Thống kê chi tiết" type="bar">
+                <graph string="Thống kê chi tiết Đặt Phòng" type="bar" sample="1">
+                    <field name="phong_id" type="row"/>
                     <field name="trang_thai" type="col"/>
-                    <field name="id" type="measure"/>
                 </graph>
             </field>
         </record>
 
-        <!-- Action -->
+        <!-- View Pivot (Bảng phân tích đa chiều Excel-style) -->
+        <record id="view_dat_phong_pivot" model="ir.ui.view">
+            <field name="name">dat.phong.pivot</field>
+            <field name="model">dat_phong</field>
+            <field name="arch" type="xml">
+                <pivot string="Báo Cáo Phân Tích Tổng Hợp" sample="1">
+                    <field name="thoi_gian_muon_du_kien" type="row" interval="month"/>
+                    <field name="phong_id" type="row"/>
+                    <field name="trang_thai" type="col"/>
+                    <field name="so_luong_nguoi" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <!-- Action Dashboard Nâng Cấp -->
         <record id="action_dat_phong_dashboard" model="ir.actions.act_window">
-            <field name="name">📊 Dashboard Trạng Thái Mượn Phòng</field>
+            <field name="name">📊 Dashboard (Phân Tích &amp; Biểu Đồ)</field>
             <field name="res_model">dat_phong</field>
-            <field name="view_mode">graph</field>
+            <field name="view_mode">graph,pivot,tree,form</field>
             <field name="view_id" ref="view_dat_phong_graph_by_status"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Chưa có dữ liệu đặt phòng để phân tích!
+                </p>
+                <p>
+                    Hãy bắt đầu bằng cách tạo quy trình đặt phòng mới để xem đồ thị trực quan ở đây.
+                </p>
+            </field>
         </record>
 
     </data>

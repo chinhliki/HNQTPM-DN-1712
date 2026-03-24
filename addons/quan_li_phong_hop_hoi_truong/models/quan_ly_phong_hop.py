@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+from odoo.exceptions import ValidationError
 
 class QuanLyPhongHop(models.Model):
     _name = "quan_ly_phong_hop"
@@ -10,6 +11,12 @@ class QuanLyPhongHop(models.Model):
         ("Hội_trường", "Hội trường"),
     ], string="Loại phòng", required=True, default="Phòng_họp")
     suc_chua = fields.Integer(string="Sức chứa")
+
+    @api.constrains('suc_chua')
+    def _check_suc_chua(self):
+        for record in self:
+            if record.suc_chua <= 0:
+                raise ValidationError("❌ Sức chứa của phòng/hội trường phải là số thực lớn hơn 0.")
 
     trang_thai = fields.Selection([
         ("Trống", "Trống"),

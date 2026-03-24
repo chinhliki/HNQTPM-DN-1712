@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+from odoo.exceptions import ValidationError
 
 class ThietBi(models.Model):
     _name = "thiet_bi"
@@ -14,6 +15,12 @@ class ThietBi(models.Model):
         ('may_tinh', 'Máy tính'),
     ], string="Loại thiết bị", required=True)
     so_luong = fields.Integer(string="Số lượng", default=1)
+    
+    @api.constrains('so_luong')
+    def _check_so_luong(self):
+        for record in self:
+            if record.so_luong < 0:
+                raise ValidationError("❌ Số lượng thiết bị không được là số âm.")
     
     
     phong_id = fields.Many2one("quan_ly_phong_hop", string="Phòng họp", required=True, ondelete="cascade")
