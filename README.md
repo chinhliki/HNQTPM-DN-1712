@@ -12,10 +12,10 @@
 
 ## 1.1. Clone project.
 ```
-git clone https://github.com/Nemmer772004/TTDN-16-05-N4.git
+[git clone https://github.com/Nemmer772004/HNQTPM-1712-N5.git](https://github.com/chinhliki/HNQTPM-DN-1712.git)
 ```
 ```
-git checkout nhom4
+git checkout nhom5
 ```
 
 
