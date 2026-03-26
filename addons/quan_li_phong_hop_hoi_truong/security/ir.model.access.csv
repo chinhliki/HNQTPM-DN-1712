@@ -5,5 +5,3 @@ access_lich_su_thay_doi,lich_su_thay_doi.lich_su_thay_doi,model_lich_su_thay_doi
 access_lich_su_muon_tra,lich_su_muon_tra.lich_su_muon_tra,model_lich_su_muon_tra,base.group_user,1,1,1,1
 access_thiet_bi,thiet_bi.thiet_bi,model_thiet_bi,base.group_user,1,1,1,1
 access_chi_tiet_muon_thiet_bi,chi_tiet_muon_thiet_bi.chi_tiet_muon_thiet_bi,model_chi_tiet_muon_thiet_bi,base.group_user,1,1,1,1
-access_dat_phong_ai,dat_phong_ai.dat_phong_ai,model_dat_phong_ai,base.group_user,1,1,1,1
-
