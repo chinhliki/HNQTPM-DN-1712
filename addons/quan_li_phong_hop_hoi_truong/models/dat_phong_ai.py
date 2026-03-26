@@ -76,7 +76,8 @@ class DatPhongAI(models.Model):
     def action_ask_ai(self):
         # Tốt nhất nên lấy từ Settings: self.env['ir.config_parameter'].sudo().get_param('gemini.api_key')
         api_key = "AIzaSyB1-huV0N_l1aM9jav21Gn9sFOC4xefiXo" 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        # Cập nhật URL sang bản ổn định v1 thay vì v1beta để tránh lỗi 404
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
         
         # Lấy dữ liệu phòng họp thực tế
         try:
