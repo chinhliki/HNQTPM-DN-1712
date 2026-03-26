@@ -1,132 +1,177 @@
 # -*- coding: utf-8 -*-
-from odoo import http, fields
-from odoo.http import request
-from datetime import datetime
-import pytz
+import json
 import logging
 import requests
+import pytz
+from datetime import datetime
+from odoo import http, fields
+from odoo.http import request
+import google.generativeai as genai
 
 _logger = logging.getLogger(__name__)
 
+GEMINI_API_KEY = "AIzaSyDmdasAZQapGTWHyTLoGBRCgzUrt2AzIp0"
+TELEGRAM_BOT_TOKEN = "8188180715:AAEo8OlO7jw4LHLs_mXWjpKXVjRSDwiv8MU"
+
+genai.configure(api_key=GEMINI_API_KEY)
+# Sử dụng model tối ưu của Gemini
+model = genai.GenerativeModel('gemini-1.5-flash')
+
 class TelegramWebhook(http.Controller):
     
-    def send_reply(self, text, chat_id):
-        BOT_TOKEN = "8188180715:AAEo8OlO7jw4LHLs_mXWjpKXVjRSDwiv8MU"
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "Markdown"
-        }
+    @http.route('/telegram/webhook', type='json', auth='public', methods=['POST'], csrf=False)
+    def process_webhook(self):
+        update = request.jsonrequest
+        if "message" in update and "text" in update["message"]:
+            chat_id = update["message"]["chat"]["id"]
+            user_text = update["message"]["text"]
+            username = update["message"]["chat"].get("username", "")
+
+            # 1. Tìm hoặc tạo Session (Bộ nhớ não) để biết đang nói chuyện ngang đâu
+            session_sudo = request.env['bot_telegram_session'].sudo()
+            session = session_sudo.search([('chat_id', '=', str(chat_id))], limit=1)
+            
+            # Khởi tạo não bộ nếu lần đầu chat
+            if not session:
+                session = session_sudo.create({
+                    'chat_id': str(chat_id),
+                    'username': username,
+                    'chat_history': json.dumps([]),
+                    'collected_data': json.dumps({})
+                })
+            
+            # Xử lý Cú pháp Reset để xóa trí nhớ bắt đầu cuộc hội thoại mới
+            if user_text.strip().lower() == '/reset':
+                session.unlink()
+                self._send_telegram(chat_id, "🔄 Đã reset luồng đặt phòng. Bạn cần hỗ trợ gì mới không?")
+                return "OK"
+
+            # 2. Xử lý câu chat bằng Gemini
+            self._handle_chat_with_gemini(session, user_text)
+
+        return "OK"
+
+    def _handle_chat_with_gemini(self, session, user_text):
+        # --- A. Cung cấp Dữ liệu Odoo nội bộ cho AI ---
+        phong_hop_sudo = request.env['quan_ly_phong_hop'].sudo().search([])
+        rooms_info = []
+        for p in phong_hop_sudo:
+            tb = ", ".join([t.name for t in p.thiet_bi_ids])
+            rooms_info.append(f"Tên phòng: '{p.name}' | Sức chứa tối đa: {p.suc_chua} | Thiết bị có sẵn: {tb}")
+        
+        nhan_vien_sudo = request.env['nhan_vien'].sudo().search([])
+        employees_info = ", ".join([nv.name for nv in nhan_vien_sudo])
+
+        # --- B. Đọc trí nhớ ---
+        chat_history = json.loads(session.chat_history)
+        collected_data = json.loads(session.collected_data)
+
+        # --- C. System Prompt Mệnh Lệnh (Cốt lõi của Bot) ---
+        prompt = f"""
+        Bạn là "Trợ Lý Ảo Đặt Phòng" thông minh của công ty chạy qua Telegram. Khách hàng đang nhắn tin cho bạn.
+        Nhiệm vụ của bạn là lấy đủ 5 thông tin sau để Đặt Phòng:
+        1. "so_luong_nguoi" (số người cần không gian phòng, dạng số nguyên).
+        2. "nhan_vien" (tên người đứng ra mượn, phải nằm trong danh sách nhân viên công ty: {employees_info}).
+        3. "ten_phong" (phòng mà khách muốn chốt. Hãy gợi ý phòng tự động dựa trên sức chứa và Danh sách phòng sau: {'; '.join(rooms_info)}).
+        4. "thoi_gian_muon" (giờ khách bắt đầu dùng phòng, phải là định dạng 'YYYY-MM-DD HH:MM').
+        5. "thoi_gian_tra" (giờ khách kết thúc, phải là định dạng 'YYYY-MM-DD HH:MM').
+
+        Bộ chứa dữ liệu tạm thời bạn đã gom nhặt được từ trước tới nay: {json.dumps(collected_data, ensure_ascii=False)}
+
+        CÂU CHAT MỚI NHẤT CỦA KHÁCH: "{user_text}"
+
+        Quy tắc trả lời:
+        - Đóng vai nhiệt tình, tự nhiên, và trả lời siêu ngắn gọn. 
+        - Nếu khách nói cần phòng 30 người, hãy quét danh sách phòng và GỢI Ý luôn phòng phù hợp nhất và thiết bị có trong đó để khách duyệt.
+        - Hãy dẫn dắt khách bằng cách hỏi từng thông tin một nếu chưa đủ (Ví dụ: "Anh ơi, anh cho em xin ngày giờ bắt đầu và kết thúc nhé?").
+        - Trở thành chiếc Bot tâm lý, nếu đã thu thập đủ trọn vẹn 5 biến số, hãy đọc lại báo cáo và hỏi khách 1 câu chốt sự thật: "Dạ thông tin đã đầy đủ, em tiến hành đặt phòng luôn nhé anh?".
+        - CHỈ KHI NÀO khách phản hồi đồng ý ở câu chốt (khách kêu Ok, Có, Duyệt...), bạn mới được gán giá trị biến "booking_confirmed" bằng true. Nếu khách bảo từ chối thì đổi ý, vẫn bằng false.
+
+        === BẮT BUỘC === 
+        Bảo mật hệ thống: Bạn chỉ được phép trả về kết quả là MỘT chuỗi văn bản dạng JSON THUẦN TÚY (Lưu ý: Không bọc trong markdown code block, không có chữ ```json). Mã JSON phải có chính xác 2 key sau:
+        {{
+            "reply": "Câu chữ bạn chat lại khách (Tự nhiên, thân thiện tiếng Việt)",
+            "json_data": {{
+                "so_luong_nguoi": 30, 
+                "nhan_vien": "Tên nhân viên", 
+                "ten_phong": "Tên phòng chốt",
+                "thoi_gian_muon": "YYYY-MM-DD HH:MM", 
+                "thoi_gian_tra": "YYYY-MM-DD HH:MM", 
+                "booking_confirmed": false
+            }}
+        }}  (Nếu thông tin nào khách chưa nói hoặc bạn AI chưa biết, bạn điền giá trị là null cho key đó nhé)
+        """
+
+        try:
+            # --- D. Gọi Gemini API ---
+            response = model.generate_content(prompt)
+            
+            # --- E. Xử lý Output JSON từ AI ---
+            raw_text = response.text.replace('```json', '').replace('```', '').strip()
+            result = json.loads(raw_text)
+            
+            gemini_reply = result.get('reply', 'Dạ, em đang bị kẹt xíu, anh thử nhắn lại nhé.')
+            new_data = result.get('json_data', {})
+            
+            # Cập nhật Session cho Trí nhớ
+            chat_history.append({"user": user_text, "bot": gemini_reply})
+            session.write({
+                'chat_history': json.dumps(chat_history[-8:]), # Giữ trí nhớ 8 câu gần nhất
+                'collected_data': json.dumps(new_data)
+            })
+            
+            # --- F. Chốt Đơn Đặt Phòng qua Logic của Odoo ---
+            if str(new_data.get('booking_confirmed')).lower() == 'true':
+                self._tao_ho_so_dat_phong(new_data, session)
+            else:
+                self._send_telegram(session.chat_id, gemini_reply)
+                
+        except json.JSONDecodeError:
+            _logger.error(f"Lỗi phân giải JSON từ Gemini: {response.text}")
+            self._send_telegram(session.chat_id, "Hệ thống AI xử lý bị rối, bạn gõ `/reset` để làm lại từ đầu nhé.")
+        except Exception as e:
+            _logger.error(f"Gemini API Error: {str(e)}")
+            self._send_telegram(session.chat_id, "Hệ thống AI đang bảo trì kết nối, vui lòng thử lại sau.")
+
+    def _tao_ho_so_dat_phong(self, data, session):
+        chat_id = session.chat_id
+        try:
+            # Đối soát nhân viên và phòng thực tế trong Odoo Data
+            nv = request.env['nhan_vien'].sudo().search([('name', 'ilike', data.get('nhan_vien'))], limit=1)
+            phong = request.env['quan_ly_phong_hop'].sudo().search([('name', 'ilike', data.get('ten_phong'))], limit=1)
+            
+            if not nv or not phong:
+                self._send_telegram(chat_id, "❌ Lỗi: Không thể tìm thấy Tên nhân viên hoặc Tên phòng đã chốt trong hệ thống. Đơn đăng ký chưa được khởi tạo! Bạn vui lòng `/reset` chat lại.")
+                return
+
+            vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+            t_muon_vn = datetime.strptime(data.get('thoi_gian_muon'), '%Y-%m-%d %H:%M')
+            t_tra_vn = datetime.strptime(data.get('thoi_gian_tra'), '%Y-%m-%d %H:%M')
+            
+            t_muon_utc = vn_tz.localize(t_muon_vn).astimezone(pytz.UTC).replace(tzinfo=None)
+            t_tra_utc = vn_tz.localize(t_tra_vn).astimezone(pytz.UTC).replace(tzinfo=None)
+
+            # Lệnh Tạo Bản Ghi Tự Động
+            request.env['dat_phong'].sudo().create({
+                'phong_id': phong.id,
+                'nguoi_muon_id': nv.id,
+                'so_luong_nguoi': int(data.get('so_luong_nguoi', 0)),
+                'thoi_gian_muon_du_kien': t_muon_utc,
+                'thoi_gian_tra_du_kien': t_tra_utc,
+                'trang_thai': 'chờ_duyệt',
+            })
+            
+            self._send_telegram(chat_id, f"🎉 THÀNH CÔNG RỰC RỠ! Bot AI đã giúp bạn đặt lịch mượn phòng '{phong.name}'. Phiếu đang ở trạng thái CHỜ DUYỆT trên hệ thống. Xin cảm ơn bạn!")
+            session.unlink()
+            
+        except Exception as e:
+            _logger.error(f"Error Create Booking: {str(e)}")
+            self._send_telegram(chat_id, f"❌ Rất tiếc, Odoo từ chối lưu phiếu tạo phòng. Nguyên nhân có thể do Lỗi Trùng Lịch hoặc vi phạm (chọn giờ quá khứ). Bạn hãy `/reset` tìm giờ khác nhé.")
+
+    def _send_telegram(self, chat_id, message):
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
         try:
             requests.post(url, json=payload, timeout=5)
-        except Exception as e:
-            _logger.error("Error sending Telegram reply: %s", str(e))
-
-    @http.route('/telegram/webhook', type='json', auth='public', methods=['POST'], csrf=False)
-    def telegram_webhook(self, **kwargs):
-        # Odoo tự động chuyển body POST sang jsonrequest khi type='json'
-        data = request.jsonrequest
-        if data and "message" in data and "text" in data["message"]:
-            chat_id = data["message"]["chat"]["id"]
-            text = data["message"]["text"].strip()
-            
-            if text.startswith("/datphong"):
-                self._handle_dat_phong(text, chat_id)
-            elif text.startswith("/start"):
-                self.send_reply("👋 Xin chào! Hãy dùng lệnh sau để AI tự động dò tìm và đặt lịch phòng họp:\n\n👉 Lệnh mẫu: `/datphong Tên_Nhân_Viên Số_Đại_Biểu Ngày(DD/MM/YYYY) Giờ_BD-Giờ_KT`\n👉 Ví dụ: `/datphong Dung 5 26/03/2026 08:00-10:00`", chat_id)
-            else:
-                self.send_reply("🤖 Lệnh không tồn tại. Hãy gõ /start để xem bảng Hướng dẫn sử dụng.", chat_id)
-                
-        return {"status": "ok"}
-
-    def _handle_dat_phong(self, text, chat_id):
-        parts = text.split()
-        # Expecting: /datphong [Tên...] [Số người] [DD/MM/YYYY] [HH:MM-HH:MM]
-        if len(parts) >= 5:
-            name_query = " ".join(parts[1:-3])
-            people_str = parts[-3]
-            date_str = parts[-2]
-            time_str = parts[-1]
-            
-            # Sử dụng user root (user=1) để được quyền thao tác ngầm vào dữ liệu
-            env = request.env(user=1)
-            
-            # Tìm kiếm nhân viên thông qua Like SQL (tên gần giống)
-            nhan_vien = env['nhan_vien'].search([('name', 'ilike', name_query)], limit=1)
-            if not nhan_vien:
-                self.send_reply(f"❌ Bạn đã nhập tên '{name_query}', nhưng BOT không tìm thấy nhân viên nào có cụm tên cấu tự này trong danh sách hệ thống nội bộ.", chat_id)
-                return
-                
-            try:
-                people = int(people_str)
-                time_range = time_str.split('-')
-                if len(time_range) != 2:
-                    raise ValueError()
-                    
-                vnt_tz = pytz.timezone('Asia/Ho_Chi_Minh')
-                
-                dt_start_local = datetime.strptime(f"{date_str} {time_range[0]}", "%d/%m/%Y %H:%M")
-                dt_end_local = datetime.strptime(f"{date_str} {time_range[1]}", "%d/%m/%Y %H:%M")
-                
-                # Kịch bản Logic Error
-                if dt_start_local < datetime.now():
-                    self.send_reply(f"❌ Lỗi: Bạn đang hẹn đặt phòng vào một Thời điểm ({time_range[0]}) nằm trong Quá khứ so với thời khắc Gõ lệnh hiện tại.", chat_id)
-                    return
-                if dt_end_local <= dt_start_local:
-                    self.send_reply("❌ Lỗi: Giờ trả phòng (Kết thúc) không được nhỏ hơn quy định Giờ bắt đầu Check-in.", chat_id)
-                    return
-
-                # Convert Local Vietnam to Server UTC DateTime
-                time_muon_utc = vnt_tz.localize(dt_start_local).astimezone(pytz.UTC).replace(tzinfo=None)
-                time_tra_utc = vnt_tz.localize(dt_end_local).astimezone(pytz.UTC).replace(tzinfo=None)
-                
-            except Exception as e:
-                self.send_reply(f"❌ Lỗi do định dạng hoặc sai số.\n👉 Hãy chép ví dụ và thay ngày: `/datphong Dung 5 26/03/2026 08:00-10:00`", chat_id)
-                return
-                
-            try:
-                # 1. Tìm kho phòng theo bộ lọc Không Gian (Sức Chứa)
-                phong_phu_hop = env['quan_ly_phong_hop'].search([('suc_chua', '>=', people)])
-                
-                # 2. Logic AI lọc Chồng Chéo Thời Gian
-                phong_trong = []
-                for phong in phong_phu_hop:
-                    trung_lich = env['dat_phong'].search([
-                        ('phong_id', '=', phong.id),
-                        ('trang_thai', 'in', ['đã_duyệt', 'đang_sử_dụng']),
-                        ('thoi_gian_muon_du_kien', '<', time_tra_utc),
-                        ('thoi_gian_tra_du_kien', '>', time_muon_utc)
-                    ])
-                    if not trung_lich:
-                        phong_trong.append(phong)
-                
-                if not phong_trong:
-                    self.send_reply(f"❌ Đã rà soát: Toàn bộ phòng có sức chứa {people} người đều không rảnh từ {time_str} ngày {date_str}. Mong bạn thử khung giờ khác nhé!", chat_id)
-                    return
-                
-                # 3. Thuật toán Tiết Kiệm Tài Nguyên (Fit Size)
-                phong_trong.sort(key=lambda p: p.suc_chua)
-                phong_chon = phong_trong[0]
-                
-                # 4. Lưu trực tiếp Data xuống Server
-                dat_phong = env['dat_phong'].create({
-                    'nguoi_muon_id': nhan_vien.id,
-                    'phong_id': phong_chon.id,
-                    'so_luong_nguoi': people,
-                    'thoi_gian_muon_du_kien': time_muon_utc,
-                    'thoi_gian_tra_du_kien': time_tra_utc,
-                    'trang_thai': 'chờ_duyệt'
-                })
-                
-                self.send_reply(f"🎉 *LỆNH ĐÃ THUYẾT LẬP THÀNH CÔNG!*\n\n"
-                                f"🤖 AI đã auto-scan và cấp phát căn phòng rẻ nhất:\n"
-                                f"👤 ĐỨNG TÊN MƯỢN: {nhan_vien.name}\n"
-                                f"🏢 TÊN PHÒNG CHỌN: {phong_chon.name} (Size MAX: {phong_chon.suc_chua} người)\n"
-                                f"🕒 GIỜ HẸN GIỮ: {time_str}\n📅 NGÀY CHỐT: {date_str}\n\n"
-                                f"🔔 Lệnh hiện nằm ở Trạng thái <CHỜ DUYỆT>. Hãy nhắn Admin phê duyệt!", chat_id)
-                
-            except Exception as e:
-                self.send_reply(f"❌ Mã lõi Odoo: {str(e)}", chat_id)
-        else:
-            self.send_reply("❌ Sai cú pháp hoặc thiếu thông tin biến.\n👉 Hãy sử dụng: `/datphong Dung 5 26/03/2026 08:00-10:00`", chat_id)
+        except Exception:
+            pass
