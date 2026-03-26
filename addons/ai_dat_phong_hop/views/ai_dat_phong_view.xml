@@ -39,15 +39,8 @@
                             <field name="thoi_gian_muon"/>
                             <field name="thoi_gian_tra"/>
                             <field name="so_luong_nguoi"/>
+                            <field name="chat_history"/>
                         </group>
-                    </sheet>
-                        <notebook>
-                            <page string="🗨 Chat trực tiếp">
-                                <group>
-                                    <field name="chat_history" widget="text" nolabel="1" style="height: 300px; color: #555; background: #f9f9f9; padding: 10px; border-radius: 5px;"/>
-                                </group>
-                            </page>
-                        </notebook>
                     </sheet>
                 </form>
             </field>
