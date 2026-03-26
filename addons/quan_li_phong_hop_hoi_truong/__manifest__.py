@@ -13,7 +13,9 @@
     """,
 
     'author': "TTDN-16-05-N4",
-    'website': "https://github.com/Nemmer772004/TTDN-16-05-N4",
+    'Update author': "HNQTPM-17-12-N6",
+    'website': "https://github.com/Nemmer772004/TTDN-16-05-N5",
+    'update website': "https://github.com/chinhliki/HNQTPM-DN-1712.git",
 
     # Categories can be used to filter modules in modules listing
     # Check https://github.com/odoo/odoo/blob/15.0/odoo/addons/base/data/ir_module_category_data.xml
