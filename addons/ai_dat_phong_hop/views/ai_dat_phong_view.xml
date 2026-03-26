@@ -15,16 +15,16 @@
                             <h1><field name="name"/></h1>
                         </div>
                         <group>
-                            <group string="💬 Cuộc hội thoại hiện tại">
-                                <field name="user_id" string="Người phụ trách"/>
-                                <field name="last_response" string="Gợi ý cuối từ Gemini" placeholder="Trợ lý đang lắng nghe..."/>
+                            <group string="🤖 Trình mô phỏng Chat">
+                                <field name="chat_bubbles_html" nolabel="1"/>
+                                <button name="action_chat_with_gemini" string="💬 Nhắn tin cho AI" type="object" class="btn-primary" style="width: 100%; margin-top: 10px;"/>
                             </group>
-                            <group string="📋 Thông tin Trích xuất từ AI">
-                                <field name="phong_id" string="🏢 Phòng đề xuất"/>
-                                <field name="nguoi_muon_id" string="👤 Người mượn"/>
-                                <field name="thoi_gian_muon" string="🕒 Dự kiến Bắt đầu"/>
-                                <field name="thoi_gian_tra" string="🕰 Dự kiến Kết thúc"/>
-                                <field name="so_luong_nguoi" string="👥 Số người"/>
+                            <group string="📋 Thông tin Xác nhận Đặt phòng">
+                                <field name="phong_id" options="{'no_create': True}"/>
+                                <field name="nguoi_muon_id" options="{'no_create': True}"/>
+                                <field name="thoi_gian_muon"/>
+                                <field name="thoi_gian_tra"/>
+                                <field name="so_luong_nguoi"/>
                             </group>
                         </group>
                         <notebook>
@@ -73,16 +73,21 @@
             <field name="name">ai_chat_wizard_form</field>
             <field name="model">ai_chat_wizard</field>
             <field name="arch" type="xml">
-                <form string="Hỏi đáp với Gemini AI">
+                <form string="Chat với Trợ lý Gemini">
                     <sheet>
+                        <div style="background: #f0f2f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <field name="ai_response" widget="text" nolabel="1" readonly="1" 
+                                   placeholder="Trợ lý đang chờ câu hỏi của bạn..."
+                                   style="background: transparent; border: none; font-style: italic; color: #555;"/>
+                        </div>
                         <group>
-                            <field name="ai_response" widget="text" style="background:#eefaff; min-height: 100px; border-left: 5px solid #00acc1; padding:10px;"/>
-                            <field name="user_message" string="Câu hỏi/Yêu cầu của bạn" placeholder="Ví dụ: Tôi cần phòng cho 5 người lúc 10h sáng mai..."/>
+                            <field name="user_message" string="Nội dung tin nhắn" 
+                                   placeholder="Gõ nội dung tại đây (VD: Tôi muốn đặt phòng họp...)"/>
                         </group>
                     </sheet>
                     <footer>
-                        <button name="action_send_message" string="Gửi đi" type="object" class="btn-primary"/>
-                        <button string="Hủy bỏ" class="btn-secondary" special="cancel"/>
+                        <button name="action_send_message" string="Gửi tin nhắn ✈️" type="object" class="btn-primary"/>
+                        <button string="Đóng" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>
             </field>

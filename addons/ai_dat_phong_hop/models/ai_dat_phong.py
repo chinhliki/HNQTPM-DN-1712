@@ -20,7 +20,8 @@ class AIDatPhong(models.Model):
     
     # Message logs
     chat_history = fields.Text(string="Lịch sử Chat (Hệ thống)", readonly=True)
-    last_response = fields.Text(string="Phản hồi cuối từ AI", readonly=True)
+    message_ids = fields.One2many('ai_chat_message', 'ai_session_id', string="Tin nhắn")
+    chat_bubbles_html = fields.Html(string="Khung Chat", compute='_compute_chat_bubbles_html')
     
     # Fields to hold extracted data
     phong_id = fields.Many2one("quan_ly_phong_hop", string="Phòng gợi ý")
@@ -48,6 +49,35 @@ class AIDatPhong(models.Model):
         vals['chat_history'] = system_prompt
         return super(AIDatPhong, self).create(vals)
 
+    def _compute_chat_bubbles_html(self):
+        for record in self:
+            html = """
+            <style>
+                .chat-container { display: flex; flex-direction: column; gap: 10px; padding: 20px; background: #f0f2f5; border-radius: 10px; max-height: 500px; overflow-y: auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+                .chat-bubble { max-width: 70%; padding: 10px 15px; border-radius: 18px; line-height: 1.4; position: relative; font-size: 14px; }
+                .chat-bubble.user { align-self: flex-end; background: #0084ff; color: white; border-bottom-right-radius: 4px; }
+                .chat-bubble.ai { align-self: flex-start; background: white; color: #1c1e21; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+                .chat-info { font-size: 10px; margin-top: 5px; opacity: 0.7; display: flex; justify-content: space-between; gap: 10px; }
+            </style>
+            <div class="chat-container">
+            """
+            for msg in record.message_ids.sorted('create_date'):
+                sender_class = 'user' if msg.sender == 'user' else 'ai'
+                sender_name = 'Bạn' if msg.sender == 'user' else 'Trợ lý Gemini'
+                html += f"""
+                <div class="chat-bubble {sender_class}">
+                    <div style="font-weight: bold; margin-bottom: 3px; font-size: 11px;">{sender_name}</div>
+                    <div>{msg.content}</div>
+                    <div class="chat-info">
+                        <span>{msg.create_date.strftime('%H:%M')}</span>
+                    </div>
+                </div>
+                """
+            if not record.message_ids:
+                html += '<div style="text-align:center; color:#999; margin:20px;">Hãy gửi tin nhắn đầu tiên để bắt đầu hỗ trợ!</div>'
+            html += "</div>"
+            record.chat_bubbles_html = html
+
     def action_chat_with_gemini(self):
         """Mở Wizard để chat hoặc xử lý tin nhắn mới"""
         return {
@@ -60,6 +90,13 @@ class AIDatPhong(models.Model):
         }
 
     def _call_gemini_api(self, user_msg):
+        # Save user message to DB
+        self.env['ai_chat_message'].create({
+            'ai_session_id': self.id,
+            'sender': 'user',
+            'content': user_msg
+        })
+
         headers = {'Content-Type': 'application/json'}
         full_prompt = f"{self.chat_history}\nNgười dùng: {user_msg}\nAI:"
         
@@ -81,9 +118,18 @@ class AIDatPhong(models.Model):
             
             ai_text = res_data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
             
+            # Clean AI text if it has JSON
+            clean_text = ai_text.split("JSON_DATA:")[0].strip() if "JSON_DATA:" in ai_text else ai_text
+            
+            # Save AI response to DB
+            self.env['ai_chat_message'].create({
+                'ai_session_id': self.id,
+                'sender': 'ai',
+                'content': clean_text
+            })
+
             # Update history
             self.chat_history = f"{full_prompt} {ai_text}"
-            self.last_response = ai_text
             
             # Try to extract JSON if present
             self._process_extracted_data(ai_text)
@@ -147,6 +193,15 @@ class AIDatPhong(models.Model):
             'res_id': new_booking.id,
             'target': 'current',
         }
+
+class AIChatMessage(models.Model):
+    _name = "ai_chat_message"
+    _description = "Nội dung tin nhắn Chat AI"
+    _order = "create_date asc"
+
+    ai_session_id = fields.Many2one('ai_dat_phong', string="Phiên AI", ondelete="cascade")
+    sender = fields.Selection([('user', 'Người dùng'), ('ai', 'Trợ lý AI')], string="Người gửi")
+    content = fields.Text(string="Nội dung")
 
 class AIChatWizard(models.TransientModel):
     _name = "ai_chat_wizard"
