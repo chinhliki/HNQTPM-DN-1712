@@ -3,6 +3,7 @@ import json
 import logging
 import requests
 import pytz
+import werkzeug
 from datetime import datetime
 from odoo import http
 from odoo.http import request
@@ -38,12 +39,12 @@ class TelegramWebhook(http.Controller):
                 # Bóc tách tin nhắn Telegram
                 raw_data = request.httprequest.data.decode('utf-8')
                 if not raw_data:
-                    return request.make_response("OK", status=200)
+                    return werkzeug.wrappers.Response("OK", status=200)
                     
                 update = json.loads(raw_data)
                 
                 if not update or "message" not in update or "text" not in update["message"]:
-                    return request.make_response("OK", status=200)
+                    return werkzeug.wrappers.Response("OK", status=200)
 
                 chat_id = update["message"]["chat"]["id"]
                 user_text = update["message"]["text"]
@@ -64,11 +65,11 @@ class TelegramWebhook(http.Controller):
                     if user_text.strip().lower() == '/reset':
                         session.unlink()
                         self._send_telegram(chat_id, "🔄 Đã reset cuộc hội thoại hoàn toàn mới.")
-                        return request.make_response("OK", status=200)
+                        return werkzeug.wrappers.Response("OK", status=200)
 
                     if not HAS_GENAI:
                         self._send_telegram(chat_id, "⚠️ AI chưa sẵn sàng do máy chủ văng lỗi thư viện Google AI.")
-                        return request.make_response("OK", status=200)
+                        return werkzeug.wrappers.Response("OK", status=200)
 
                     self._handle_chat_with_gemini(env, session, user_text)
 
@@ -77,9 +78,9 @@ class TelegramWebhook(http.Controller):
 
         except Exception as e:
             _logger.error(f"Db/Router Crash: {str(e)}")
-            return request.make_response("Bad Request", status=400)
+            return werkzeug.wrappers.Response("Bad Request", status=400)
 
-        return request.make_response("OK", status=200)
+        return werkzeug.wrappers.Response("OK", status=200)
 
     # Khung Xử Lý Thông Minh AI Gọi Database Nội Bộ Odoo
     def _handle_chat_with_gemini(self, env, session, user_text):
