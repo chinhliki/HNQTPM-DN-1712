@@ -67,44 +67,79 @@ class DatPhongAI(models.Model):
         return dt.replace(tzinfo=pytz.UTC).astimezone(user_tz).strftime('%H:%M')
 
     def action_chat_ai(self):
-        """Gửi tin nhắn và nhận phản hồi"""
+        """Gửi tin nhắn, nhận phản hồi và xử lý logic ý định (intent)"""
         self.ensure_one()
+        
+        # 1. Gọi AI để lấy câu trả lời tư vấn
         self.action_ask_ai()
-        # Không cần return action nếu bạn muốn ở lại trang hiện tại, Odoo sẽ tự reload field compute
+        
+        # 2. Phân tích ý định (Simple Logic): Nếu khách muốn đặt phòng
+        # Dựa trên từ khóa trong tin nhắn người dùng
+        booking_keywords = ['đặt', 'book', 'mượn', 'thuê', 'lấy phòng']
+        if any(key in self.name.lower() for key in booking_keywords):
+            # Nếu người dùng có ý định đặt phòng, chúng ta có thể bổ sung thông tin vào response
+            # Hoặc thực hiện hành động gì đó. Ở đây mình gợi ý AI luôn đưa ra link dẫn tới menu đặt phòng.
+            pass
+
         return True
 
     def action_ask_ai(self):
-        # Tốt nhất nên lấy từ Settings: self.env['ir.config_parameter'].sudo().get_param('gemini.api_key')
+        """Kết nối trực tiếp tới Google AI Studio v1 Stable"""
         api_key = "AIzaSyB1-huV0N_l1aM9jav21Gn9sFOC4xefiXo" 
-        # Cập nhật URL sang bản ổn định v1 thay vì v1beta để tránh lỗi 404
         url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
         
-        # Lấy dữ liệu phòng họp thực tế
+        # Thu thập dữ liệu ngữ cảnh
         try:
             rooms = self.env['quan_ly_phong_hop'].search([])
-            room_data = [{"phòng": r.name, "sức chứa": r.suc_chua, "trạng thái": r.trang_thai} for r in rooms]
+            room_list = []
+            for r in rooms:
+                room_list.append(f"- {r.name}: Sức chứa {r.suc_chua} người, Trạng thái: {r.trang_thai}")
+            room_context = "\n".join(room_list)
         except:
-            room_data = "Không thể lấy dữ liệu phòng."
+            room_context = "Không có dữ liệu phòng."
 
-        context = f"""
-        Bạn là trợ lý AI thông minh trong hệ thống Odoo của doanh nghiệp.
-        Dữ liệu phòng họp hiện tại: {json.dumps(room_data, ensure_ascii=False)}
-        Nhiệm vụ: Tư vấn phòng phù hợp dựa trên yêu cầu người dùng. 
-        Nếu họ muốn đặt, hãy bảo họ vào menu 'Đăng ký mượn phòng'.
-        Trả lời bằng tiếng Việt, thân thiện, dùng icon.
+        # Thiết lập Prompt Role-play cho AI
+        system_instruction = f"""
+        Bạn là Trợ lý Đặt phòng thông minh của công ty. 
+        Dữ liệu phòng họp thực tế từ hệ thống:
+        {room_context}
+
+        QUY TẮC PHẢN HỒI:
+        1. Nếu khách hỏi về phòng trống/phù hợp: Tư vấn dựa trên dữ liệu trên.
+        2. Nếu khách muốn ĐẶT PHÒNG: Hãy bảo họ nhấn vào menu 'Đăng ký mượn phòng' để tạo đơn chính thức.
+        3. Văn phong: Chuyên nghiệp, dùng tiếng Việt, có emoji.
+        4. Trả lời ngắn gọn, đi thẳng vào vấn đề.
         """
 
         payload = {
-            "contents": [{"parts": [{"text": f"{context}\n\nNgười dùng hỏi: {self.name}"}]}]
+            "contents": [{
+                "parts": [{"text": f"{system_instruction}\n\nCâu hỏi khách hàng: {self.name}"}]
+            }],
+            "generationConfig": {
+                "temperature": 0.7,
+                "topK": 40,
+                "topP": 0.95,
+                "maxOutputTokens": 1024,
+            }
         }
 
         try:
-            res = requests.post(url, json=payload, timeout=15)
+            # Sử dụng headers để đảm bảo định dạng
+            headers = {'Content-Type': 'application/json'}
+            res = requests.post(url, json=payload, headers=headers)
+            
+            if res.status_code == 404:
+                self.write({'response': "⚠️ Lỗi 404: Endpoint API v1 không tìm thấy. Có thể Key hoặc Model chưa khớp."})
+                return False
+                
             res.raise_for_status()
             result = res.json()
+            
             if 'candidates' in result:
                 answer = result['candidates'][0]['content']['parts'][0]['text']
                 self.write({'response': answer})
         except Exception as e:
-            _logger.error(f"Gemini AI Error: {str(e)}")
-            self.write({'response': f"⚠️ Xin lỗi, tôi gặp trục trặc kết nối: {str(e)}"})
+            error_msg = str(e)
+            _logger.error(f"Gemini AI Error: {error_msg}")
+            # Hiển thị lỗi thân thiện hơn nhưng vẫn chi tiết để debug
+            self.write({'response': f"🤖 Rất tiếc, AI đang bận hoặc gặp lỗi kết nối. Vui lòng thử lại sau giây lát.\n(Chi tiết: {error_msg})"})
