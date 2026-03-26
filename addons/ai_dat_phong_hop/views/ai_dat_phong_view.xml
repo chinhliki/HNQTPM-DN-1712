@@ -15,16 +15,31 @@
                             <h1><field name="name"/></h1>
                         </div>
                         <group>
-                            <group string="🤖 Trình mô phỏng Chat">
+                            <group string="💬 Trò chuyện với Trợ lý Gemini">
                                 <field name="chat_bubbles_html" nolabel="1"/>
-                                <button name="action_chat_with_gemini" string="💬 Nhắn tin cho AI" type="object" class="btn-primary" style="width: 100%; margin-top: 10px;"/>
+                                <div class="o_row" style="display: flex; gap: 5px; margin-top: 10px;">
+                                    <field name="new_user_input" nolabel="1" placeholder="Nhập tin nhắn tại đây..." style="flex-grow: 1;"/>
+                                    <button name="action_send_direct_message" string="Gửi ✈️" type="object" class="btn-primary"/>
+                                </div>
                             </group>
-                            <group string="📋 Thông tin Xác nhận Đặt phòng">
-                                <field name="phong_id" options="{'no_create': True}"/>
-                                <field name="nguoi_muon_id" options="{'no_create': True}"/>
-                                <field name="thoi_gian_muon"/>
-                                <field name="thoi_gian_tra"/>
-                                <field name="so_luong_nguoi"/>
+                            <group string="📋 Đề xuất từ Trợ lý AI">
+                                <label for="phong_id" string="Phòng họp"/>
+                                <div class="o_row">
+                                    <field name="phong_id" options="{'no_create': True}" placeholder="Chờ AI gợi ý..."/>
+                                </div>
+                                <label for="nguoi_muon_id" string="Người mượn"/>
+                                <div class="o_row">
+                                    <field name="nguoi_muon_id" options="{'no_create': True}" placeholder="Chờ AI nhận diện..."/>
+                                </div>
+                                <field name="thoi_gian_muon" string="Giờ bắt đầu"/>
+                                <field name="thoi_gian_tra" string="Giờ kết thúc"/>
+                                <field name="so_luong_nguoi" string="Số người"/>
+                                
+                                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+                                    <button name="action_confirm_booking" string="✅ Xác nhận &amp; Đặt phòng ngay" 
+                                            type="object" class="btn-success" style="width: 100%; font-weight: bold; height: 45px;"
+                                            attrs="{'invisible': [('phong_id', '=', False)]}"/>
+                                </div>
                             </group>
                         </group>
                         <notebook>

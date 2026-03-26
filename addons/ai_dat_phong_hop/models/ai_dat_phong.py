@@ -23,6 +23,9 @@ class AIDatPhong(models.Model):
     message_ids = fields.One2many('ai_chat_message', 'ai_session_id', string="Tin nhắn")
     chat_bubbles_html = fields.Html(string="Khung Chat", compute='_compute_chat_bubbles_html')
     
+    # Direct Input for Chat
+    new_user_input = fields.Text(string="Nhập yêu cầu từ bạn...")
+    
     # Fields to hold extracted data
     phong_id = fields.Many2one("quan_ly_phong_hop", string="Phòng gợi ý")
     nguoi_muon_id = fields.Many2one("nhan_vien", string="Người mượn")
@@ -79,7 +82,7 @@ class AIDatPhong(models.Model):
             record.chat_bubbles_html = html
 
     def action_chat_with_gemini(self):
-        """Mở Wizard để chat hoặc xử lý tin nhắn mới"""
+        """Mở Wizard (Dự phòng nếu muốn giao diện nổi)"""
         return {
             'name': 'Hỏi Trợ lý AI',
             'type': 'ir.actions.act_window',
@@ -88,6 +91,20 @@ class AIDatPhong(models.Model):
             'target': 'new',
             'context': {'default_ai_session_id': self.id}
         }
+
+    def action_send_direct_message(self):
+        """Gửi tin nhắn trực tiếp từ Form view"""
+        self.ensure_one()
+        if not self.new_user_input:
+            return
+        
+        user_msg = self.new_user_input
+        self.new_user_input = "" # Xóa nội dung ngay sau khi đọc
+        
+        # Gọi Gemini xử lý
+        self._call_gemini_api(user_msg)
+        
+        return True # Refresh View
 
     def _call_gemini_api(self, user_msg):
         # Save user message to DB
