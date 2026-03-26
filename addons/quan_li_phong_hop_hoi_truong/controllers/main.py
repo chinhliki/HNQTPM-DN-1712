@@ -19,15 +19,20 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 
 class TelegramWebhook(http.Controller):
     
-    @http.route('/telegram/webhook', type='json', auth='public', methods=['POST'], csrf=False)
-    def process_webhook(self):
-        update = request.jsonrequest
+    @http.route('/telegram/webhook', type='http', auth='public', methods=['POST'], csrf=False)
+    def process_webhook(self, **kw):
+        # Telegram gửi JSON THô (Raw JSON), không phải Odoo JSON-RPC nên bắt buộc type='http'
+        try:
+            update = json.loads(request.httprequest.data)
+        except Exception:
+            return request.make_response("Bad Request", status=400)
+
         if "message" in update and "text" in update["message"]:
             chat_id = update["message"]["chat"]["id"]
             user_text = update["message"]["text"]
             username = update["message"]["chat"].get("username", "")
 
-            # 1. Tìm hoặc tạo Session (Bộ nhớ não) để biết đang nói chuyện ngang đâu
+            # 1. Tìm hoặc tạo Session (Bộ nhớ não)
             session_sudo = request.env['bot_telegram_session'].sudo()
             session = session_sudo.search([('chat_id', '=', str(chat_id))], limit=1)
             
@@ -43,13 +48,13 @@ class TelegramWebhook(http.Controller):
             # Xử lý Cú pháp Reset để xóa trí nhớ bắt đầu cuộc hội thoại mới
             if user_text.strip().lower() == '/reset':
                 session.unlink()
-                self._send_telegram(chat_id, "🔄 Đã reset luồng đặt phòng. Bạn cần hỗ trợ gì mới không?")
-                return "OK"
+                self._send_telegram(chat_id, "🔄 Đã xóa trắng biểu mẫu phòng. Bạn cần hỗ trợ gì mới không?")
+                return request.make_response("OK", status=200)
 
             # 2. Xử lý câu chat bằng Gemini
             self._handle_chat_with_gemini(session, user_text)
 
-        return "OK"
+        return request.make_response("OK", status=200)
 
     def _handle_chat_with_gemini(self, session, user_text):
         # --- A. Cung cấp Dữ liệu Odoo nội bộ cho AI ---
