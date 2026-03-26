@@ -12,36 +12,35 @@
                     </header>
                     <sheet>
                         <div class="oe_title">
-                            <h1><field name="name"/></h1>
+                            <h1><field name="name" placeholder="Tiêu đề cuộc hội thoại..."/></h1>
                         </div>
-                        <group>
-                            <group string="💬 Trò chuyện với Trợ lý Gemini">
+                        
+                        <!-- Giao diện Chat Messenger -->
+                        <div style="max-width: 800px; margin: 0 auto; border: 1px solid #ddd; border-radius: 12px; overflow: hidden; background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                            <!-- Khung hiển thị bong bóng chat -->
+                            <div style="height: 500px; overflow-y: auto; background: #f0f2f5;">
                                 <field name="chat_bubbles_html" nolabel="1"/>
-                                <div class="o_row" style="display: flex; gap: 5px; margin-top: 10px;">
-                                    <field name="new_user_input" nolabel="1" placeholder="Nhập tin nhắn tại đây..." style="flex-grow: 1;"/>
-                                    <button name="action_send_direct_message" string="Gửi ✈️" type="object" class="btn-primary"/>
-                                </div>
-                            </group>
-                            <group string="📋 Đề xuất từ Trợ lý AI">
-                                <label for="phong_id" string="Phòng họp"/>
-                                <div class="o_row">
-                                    <field name="phong_id" options="{'no_create': True}" placeholder="Chờ AI gợi ý..."/>
-                                </div>
-                                <label for="nguoi_muon_id" string="Người mượn"/>
-                                <div class="o_row">
-                                    <field name="nguoi_muon_id" options="{'no_create': True}" placeholder="Chờ AI nhận diện..."/>
-                                </div>
-                                <field name="thoi_gian_muon" string="Giờ bắt đầu"/>
-                                <field name="thoi_gian_tra" string="Giờ kết thúc"/>
-                                <field name="so_luong_nguoi" string="Số người"/>
-                                
-                                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-                                    <button name="action_confirm_booking" string="✅ Xác nhận &amp; Đặt phòng ngay" 
-                                            type="object" class="btn-success" style="width: 100%; font-weight: bold; height: 45px;"
-                                            attrs="{'invisible': [('phong_id', '=', False)]}"/>
-                                </div>
-                            </group>
+                            </div>
+                            
+                            <!-- Khung nhập liệu ở dưới cùng -->
+                            <div style="padding: 15px; background: white; border-top: 1px solid #eee; display: flex; gap: 10px; align-items: center;">
+                                <field name="new_user_input" nolabel="1" 
+                                       placeholder="Hỏi AI để đặt phòng (Ví dụ: Đặt phòng họp lớn lúc 2h chiều)..." 
+                                       style="flex-grow: 1; border-radius: 20px; border: 1px solid #ddd; padding: 10px 20px; resize: none; height: 40px;"/>
+                                <button name="action_send_direct_message" string="Gửi ✈️" type="object" 
+                                        class="btn-primary" style="border-radius: 20px; padding: 0 25px; height: 40px;"/>
+                            </div>
+                        </div>
+
+                        <!-- Các thông số AI trích xuất (Ẩn đi, chỉ dùng để AI lưu dữ liệu) -->
+                        <group invisible="1">
+                            <field name="phong_id"/>
+                            <field name="nguoi_muon_id"/>
+                            <field name="thoi_gian_muon"/>
+                            <field name="thoi_gian_tra"/>
+                            <field name="so_luong_nguoi"/>
                         </group>
+                    </sheet>
                         <notebook>
                             <page string="🗨 Chat trực tiếp">
                                 <group>
