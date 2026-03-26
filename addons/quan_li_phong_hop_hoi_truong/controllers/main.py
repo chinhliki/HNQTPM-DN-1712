@@ -6,16 +6,20 @@ import pytz
 from datetime import datetime
 from odoo import http, fields
 from odoo.http import request
-import google.generativeai as genai
 
 _logger = logging.getLogger(__name__)
 
-GEMINI_API_KEY = "AIzaSyDmdasAZQapGTWHyTLoGBRCgzUrt2AzIp0"
-TELEGRAM_BOT_TOKEN = "8188180715:AAEo8OlO7jw4LHLs_mXWjpKXVjRSDwiv8MU"
+try:
+    import google.generativeai as genai
+    HAS_GENAI = True
+    GEMINI_API_KEY = "AIzaSyDmdasAZQapGTWHyTLoGBRCgzUrt2AzIp0"
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    _logger.error(f"Failed to load genai: {str(e)}")
+    HAS_GENAI = False
 
-genai.configure(api_key=GEMINI_API_KEY)
-# Sử dụng model tối ưu của Gemini
-model = genai.GenerativeModel('gemini-1.5-flash')
+TELEGRAM_BOT_TOKEN = "8188180715:AAEo8OlO7jw4LHLs_mXWjpKXVjRSDwiv8MU"
 
 class TelegramWebhook(http.Controller):
     
@@ -49,6 +53,10 @@ class TelegramWebhook(http.Controller):
             if user_text.strip().lower() == '/reset':
                 session.unlink()
                 self._send_telegram(chat_id, "🔄 Đã xóa trắng biểu mẫu phòng. Bạn cần hỗ trợ gì mới không?")
+                return request.make_response("OK", status=200)
+
+            if not HAS_GENAI:
+                self._send_telegram(chat_id, "⚠️ Cảnh báo: Odoo chưa được cài thư viện google-generativeai. Bạn vui lòng chạy lệnh `pip install google-generativeai` trên máy chủ và Restart lại Odoo nhé.")
                 return request.make_response("OK", status=200)
 
             # 2. Xử lý câu chat bằng Gemini
