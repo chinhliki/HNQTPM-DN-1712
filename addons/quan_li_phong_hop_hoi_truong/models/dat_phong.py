@@ -343,12 +343,3 @@ class ChiTietMuonThietBi(models.Model):
         for record in self:
             if record.so_luong_muon <= 0:
                 raise ValidationError("Số lượng mượn phải lớn hơn 0.")
-
-class BotTelegramSession(models.Model):
-    _name = "bot_telegram_session"
-    _description = "Lưu trữ phiên bộ nhớ Chatbot Telegram"
-    
-    chat_id = fields.Char(string="Telegram Chat ID", required=True, index=True)
-    username = fields.Char(string="Tên tài khoản")
-    chat_history = fields.Text(string="Lịch sử Chat JSON", default="[]")
-    collected_data = fields.Text(string="Dữ liệu Form JSON", default="{}")
