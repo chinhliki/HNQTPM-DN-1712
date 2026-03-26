@@ -56,5 +56,10 @@
                   name="📊 DashBoard"
                   parent="menu_root"
                   action="action_dat_phong_dashboard"/>
+        <menuitem id="menu_dat_phong_ai"
+                  name="🤖 AI Assistant"
+                  parent="menu_root"
+                  action="action_dat_phong_ai"
+                  sequence="100"/>
     </data>
 </odoo>

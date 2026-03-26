@@ -1,0 +1,42 @@
+<odoo>
+    <data>
+        <record id="view_dat_phong_ai_form" model="ir.ui.view">
+            <field name="name">dat_phong_ai.form</field>
+            <field name="model">dat_phong_ai</field>
+            <field name="arch" type="xml">
+                <form string="🤖 AI Assistant Chat" class="o_ai_chat_form">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>🤖 Trợ lý AI Thông minh</h1>
+                        </div>
+                        
+                        <!-- Khung hiển thị lịch sử Chat -->
+                        <field name="chat_log" widget="html" readonly="1" nolabel="1"/>
+                        
+                        <group string="Gửi Tin Nhắn">
+                            <label for="name" string="Soạn tin nhắn..."/>
+                            <div class="o_row">
+                                <field name="name" 
+                                       placeholder="Ví dụ: Tìm phòng họp cho 10 người chiều nay..."
+                                       style="width: 80% !important; border-radius: 5px;"/>
+                                <button name="action_chat_ai" 
+                                        string="Gửi ✉️" 
+                                        type="object" 
+                                        class="oe_highlight" 
+                                        style="width: 15% !important; margin-left: 10px;"/>
+                            </div>
+                            <field name="nguoi_muon_id" invisible="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_dat_phong_ai" model="ir.actions.act_window">
+            <field name="name">AI Assistant</field>
+            <field name="res_model">dat_phong_ai</field>
+            <field name="view_mode">form</field>
+            <field name="target">current</field>
+        </record>
+    </data>
+</odoo>
