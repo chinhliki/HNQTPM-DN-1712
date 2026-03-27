@@ -27,7 +27,8 @@ class AIAssistant(models.Model):
         for rec in self:
             api_key = self.env['ir.config_parameter'].sudo().get_param('hndn_ai_base.hndn_gemini_api_key')
             if not api_key:
-                return "Vui lòng cấu hình Gemini API Key!"
+                # Fallback key khi chưa cấu hình qua Settings
+                api_key = "AIzaSyB1-huV0N_l1aM9jav21Gn9sFOC4xefiXo"
 
             # 1. Lấy lịch sử 10 tin nhắn gần nhất
             history = ""
