@@ -52,6 +52,7 @@ class AIDatPhong(models.Model):
         vals['chat_history'] = system_prompt
         return super(AIDatPhong, self).create(vals)
 
+    @api.depends('message_ids', 'message_ids.content', 'message_ids.sender')
     def _compute_chat_bubbles_html(self):
         for record in self:
             html = """
@@ -94,17 +95,25 @@ class AIDatPhong(models.Model):
 
     def action_send_direct_message(self):
         """Gửi tin nhắn trực tiếp từ Form view"""
-        self.ensure_one()
+        # Đảm bảo bản ghi đã được lưu vào database trước khi gọi API
+        if not self.id or isinstance(self.id, models.NewId):
+            self.ensure_one()
+            # Thực hiện lưu bản ghi nếu đang ở chế độ draft/new
+            self.env.cr.commit() 
+
         if not self.new_user_input:
             return
         
         user_msg = self.new_user_input
-        self.new_user_input = "" # Xóa nội dung ngay sau khi đọc
+        self.write({'new_user_input': ""}) # Clear input in DB
         
         # Gọi Gemini xử lý
         self._call_gemini_api(user_msg)
         
-        return True # Refresh View
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'reload', # Force UI refresh
+        }
 
     def _call_gemini_api(self, user_msg):
         # Save user message to DB
