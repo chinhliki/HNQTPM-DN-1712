@@ -21,6 +21,10 @@ class ThietBi(models.Model):
         for record in self:
             if record.so_luong < 0:
                 raise ValidationError("❌ Số lượng thiết bị không được là số âm.")
+            if record.so_luong == 0:
+                # Cho phép = 0 (hết hàng) nhưng tự chuyển trạng thái
+                if record.trang_thai == 'san_sang':
+                    record.trang_thai = 'dang_su_dung'
     
     
     phong_id = fields.Many2one("quan_ly_phong_hop", string="Phòng họp", required=True, ondelete="cascade")
