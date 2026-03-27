@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="ai_assistant_view_tree" model="ir.ui.view">
+        <field name="name">ai_assistant.view.tree</field>
+        <field name="model">ai_assistant</field>
+        <field name="arch" type="xml">
+            <tree string="Lịch sử AI">
+                <field name="create_date" string="Thời gian"/>
+                <field name="question"/>
+                <field name="user_id"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="ai_assistant_view_form" model="ir.ui.view">
+        <field name="name">ai_assistant.view.form</field>
+        <field name="model">ai_assistant</field>
+        <field name="arch" type="xml">
+            <form string="Trợ lý AI">
+                <sheet>
+                    <group>
+                        <field name="question"/>
+                        <field name="answer"/>
+                        <field name="user_id"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="ai_assistant_action" model="ir.actions.act_window">
+        <field name="name">Trợ lý AI</field>
+        <field name="res_model">ai_assistant</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="nhan_su_ai_chat_action" model="ir.actions.client">
+        <field name="name">AI Chat Assistant</field>
+        <field name="tag">hndn_ai_base.ai_chat_action</field>
+    </record>
+</odoo>

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hndn_ai_base.AIChat" owl="1">
+        <div class="o_ai_chat_app">
+            <!-- Sidebar -->
+            <div class="o_ai_chat_sidebar">
+                <div class="o_ai_chat_sidebar_header">
+                    <h4>Cuộc trò chuyện</h4>
+                    <button class="btn btn-primary btn-sm rounded-circle" t-on-click="createNewChat">
+                        <i class="fa fa-plus"/>
+                    </button>
+                </div>
+                <div class="o_ai_chat_list">
+                    <t t-foreach="state.conversations" t-as="conv" t-key="conv.id">
+                        <div class="o_ai_chat_item" t-att-class="{active: state.activeId === conv.id}" t-on-click="() => this.selectConversation(conv.id)">
+                            <div class="o_ai_chat_item_content">
+                                <div class="o_ai_chat_item_title"><t t-esc="conv.question or 'Mới...'"/></div>
+                                <div class="o_ai_chat_item_date"><t t-esc="conv.create_date"/></div>
+                            </div>
+                            <div class="o_ai_chat_item_delete" t-att-data-id="conv.id" t-on-click="handleDelete">
+                                <i class="fa fa-trash-o"/>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </div>
+
+            <!-- Main Area -->
+            <div class="o_ai_chat_main">
+                <div class="o_ai_chat_header_main">
+                    <div class="o_ai_avatar">
+                        <i class="fa fa-robot"/>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold; font-size: 16px;">Trợ lý AI - Đặt Phòng Hỏp</div>
+                        <div style="font-size: 12px; color: #28a745;">
+                            <span class="o_ai_status_dot"/> Trực tuyến 24/7
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div class="o_ai_message_list" t-ref="messageList">
+                    <t t-if="!state.activeId">
+                        <div class="text-center mt-5">
+                            <i class="fa fa-comments-o fa-3x" style="opacity: 0.1"/>
+                            <p class="text-muted mt-3">Chọn một cuộc trò chuyện hoặc bắt đầu mới!</p>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <t t-foreach="state.messages" t-as="msg" t-key="msg.id">
+                            <!-- User Message -->
+                            <t t-if="msg.role === 'user'">
+                                <div class="o_ai_bubble_wrapper user">
+                                    <div class="o_ai_chat_bubble"><t t-esc="msg.content"/></div>
+                                </div>
+                            </t>
+                            <!-- AI Message -->
+                            <t t-else="">
+                                <div class="o_ai_bubble_wrapper ai">
+                                    <div class="o_ai_chat_bubble" t-raw="msg.content"/>
+                                </div>
+                            </t>
+                        </t>
+
+                        <!-- Related Question Suggestions -->
+                        <div t-if="state.suggestions.length and !state.isTyping" class="o_ai_suggestions mt-3">
+                            <div class="o_ai_suggestion_title">Gợi ý liên quan:</div>
+                            <div class="o_ai_suggestion_list">
+                                <t t-foreach="state.suggestions" t-as="suggestion" t-key="suggestion">
+                                    <div class="o_ai_suggestion_item" t-on-click="() => this.setQuickQuery(suggestion)">
+                                        <t t-esc="suggestion"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions - Phòng hỏp -->
+                        <div t-if="!state.messages.length" class="o_ai_quick_actions mt-3">
+                            <div class="o_ai_quick_btn" t-on-click="() => this.setQuickQuery('Tôi muốn đặt phòng hỏp')">
+                                <i class="fa fa-calendar-plus-o"/> <span>Đặt phòng</span>
+                            </div>
+                            <div class="o_ai_quick_btn" t-on-click="() => this.setQuickQuery('Phòng nào có sức chứa lớn nhất?')">
+                                <i class="fa fa-building-o"/> <span>Xem phòng</span>
+                            </div>
+                            <div class="o_ai_quick_btn" t-on-click="() => this.setQuickQuery('Phòng nào trống vào sáng mai?')">
+                                <i class="fa fa-clock-o"/> <span>Lịch trống</span>
+                            </div>
+                            <div class="o_ai_quick_btn" t-on-click="() => this.setQuickQuery('Hướng dẫn đặt phòng')">
+                                <i class="fa fa-question-circle"/> <span>Hướng dẫn</span>
+                            </div>
+                        </div>
+
+                        <div t-if="state.isTyping" class="o_ai_bubble_wrapper ai">
+                            <div class="o_ai_chat_bubble o_ai_typing">Đang suy nghĩ...</div>
+                        </div>
+                    </t>
+                </div>
+
+                <!-- Input -->
+                <div class="o_ai_chat_footer" t-if="state.activeId">
+                    <div class="o_ai_input_wrapper">
+                        <i class="fa fa-smile-o" style="font-size: 20px; color: #888;"/>
+                        <input type="text" 
+                               class="o_ai_input" 
+                               placeholder="Gửi tin nhắn cho AI..."
+                               t-model="state.inputValue"
+                               t-on-keydown="onInputKeydown"/>
+                        <div class="o_ai_send_btn" t-on-click="sendMessage">
+                            <i class="fa fa-paper-plane"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

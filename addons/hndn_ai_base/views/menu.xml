@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_hndn_ai_root" name="HNDN AI" sequence="100" web_icon="hndn_ai_base,static/description/icon.png"/>
+    <menuitem id="menu_hndn_ai_chat" name="AI Chat" parent="menu_hndn_ai_root" action="nhan_su_ai_chat_action" sequence="10"/>
+    <menuitem id="menu_hndn_ai_history" name="Lịch sử" parent="menu_hndn_ai_root" action="ai_assistant_action" sequence="20"/>
+    <menuitem id="menu_hndn_ai_config" name="Cấu hình" parent="menu_hndn_ai_root" action="action_hndn_ai_config_settings" sequence="100"/>
+</odoo>
