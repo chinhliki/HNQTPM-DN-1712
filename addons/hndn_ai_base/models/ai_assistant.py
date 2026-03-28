@@ -27,12 +27,7 @@ class AIAssistant(models.Model):
         for rec in self:
             api_key = self.env['ir.config_parameter'].sudo().get_param('hndn_ai_base.hndn_gemini_api_key')
             if not api_key:
-                self.env['ai_chat_message'].create({
-                    'session_id': rec.id,
-                    'role': 'assistant',
-                    'content': "⚠️ Chưa có API Key. Vui lòng vào Settings → HNDN AI → nhập Gemini API Key!"
-                })
-                continue
+                return "Vui lòng cấu hình Gemini API Key!"
 
             # 1. Lấy lịch sử 10 tin nhắn gần nhất
             history = ""

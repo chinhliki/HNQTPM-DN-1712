@@ -19,8 +19,8 @@ class AIMessengerUtils:
         
         api_key = api_key.strip()
         
-        # gemini-1.5-flash dùng endpoint /v1/ (không phải /v1beta/)
-        url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
+        # Sử dụng v1beta và model gemini-flash-latest theo KHỚP CHÍNH XÁC curl của người dùng
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
         headers = {
             'Content-Type': 'application/json',
             'X-goog-api-key': api_key
