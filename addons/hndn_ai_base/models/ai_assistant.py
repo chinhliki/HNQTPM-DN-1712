@@ -24,42 +24,46 @@ class AIAssistant(models.Model):
 
     @staticmethod
     def _format_ai_response(text):
-        """
-        Chuyển đổi text thuần từ Gemini thành HTML dễ đọc trong bubble chat.
-        Xử lý: xuống dòng, in đậm (**text**), danh sách gạch đầu dòng (- item), emoji giữ nguyên.
-        """
+        """ Chuyển đổi văn bản thuần/markdown từ AI sang HTML đẹp mắt """
         if not text:
-            return text
+            return ""
 
-        # Escape HTML cơ bản để tránh XSS (trừ các tag sẽ tự thêm)
-        text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-        # In đậm **text** → <b>text</b>
-        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
-
-        # In nghiêng *text* (không phải **) → <i>text</i>
-        text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', text)
-
-        # Xử lý từng dòng
+        import re
+        
+        # Xử lý in đậm **text**
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        
+        # Chia theo dòng để xử lý list
         lines = text.split('\n')
-        result_lines = []
+        formatted_lines = []
+        in_list = False
+        
         for line in lines:
-            stripped = line.strip()
-            # Dòng bắt đầu bằng "- " hoặc "• " → bullet point
-            if re.match(r'^[-•] ', stripped):
-                content = stripped[2:]
-                result_lines.append(f'<div style="margin:2px 0; padding-left:12px;">• {content}</div>')
-            # Dòng bắt đầu bằng số "1. ", "2. " → numbered list
-            elif re.match(r'^\d+\. ', stripped):
-                result_lines.append(f'<div style="margin:2px 0; padding-left:12px;">{stripped}</div>')
-            # Dòng trống → khoảng cách nhỏ
-            elif stripped == '':
-                result_lines.append('<div style="height:6px;"></div>')
-            # Dòng bình thường
+            line = line.strip()
+            if not line:
+                if in_list:
+                    formatted_lines.append('</ul>')
+                    in_list = False
+                formatted_lines.append('<div style="height:8px;"></div>')
+                continue
+                
+            # Phát hiện list (bullet points: *, -, • hoặc numbered list: 1.)
+            if re.match(r'^([\*\-\•]|\d+\.)\s+', line):
+                if not in_list:
+                    formatted_lines.append('<ul style="padding-left: 20px; margin-bottom: 10px;">')
+                    in_list = True
+                content = re.sub(r'^([\*\-\•]|\d+\.)\s+', '', line)
+                formatted_lines.append(f'<li style="margin-bottom: 4px;">{content}</li>')
             else:
-                result_lines.append(f'<div>{stripped}</div>')
-
-        return '\n'.join(result_lines)
+                if in_list:
+                    formatted_lines.append('</ul>')
+                    in_list = False
+                formatted_lines.append(f'<div style="margin-bottom: 2px;">{line}</div>')
+                
+        if in_list:
+            formatted_lines.append('</ul>')
+            
+        return "".join(formatted_lines)
 
     def action_ask_ai(self):
         import json
