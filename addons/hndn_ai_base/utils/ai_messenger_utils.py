@@ -19,8 +19,8 @@ class AIMessengerUtils:
         
         api_key = api_key.strip()
         
-        # Sử dụng Gemini 2.0 Flash - nhanh nhất, miễn phí, thông minh hơn 1.5
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        # Gemini 2.5 Flash Preview - model mới nhất, thông minh nhất hiện tại
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent"
         headers = {
             'Content-Type': 'application/json',
             'X-goog-api-key': api_key
