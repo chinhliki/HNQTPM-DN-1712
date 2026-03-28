@@ -123,31 +123,36 @@ class AIAssistant(models.Model):
 
             phong_info = "\n".join(phong_info_lines) or "  (Chưa có phòng nào trong hệ thống)"
 
-            # 4. Ngữ cảnh bổ sung theo từ khóa
-            extra_context = ""
-            if any(k in question.lower() for k in ['nhân viên', 'lương', 'phòng ban']):
-                employees = self.env['nhan_vien'].search([], limit=5)
-                emp_info = "\n".join([f"- {e.name}" for e in employees])
-                extra_context += f"\nDanh sách một số nhân viên:\n{emp_info}\n"
+            # 4. Ngữ cảnh bổ sung: Danh sách toàn bộ nhân viên để AI đối soát tên
+            employees = self.env['nhan_vien'].search([])
+            emp_info = "\n".join([f"- {e.name}" for e in employees])
+            extra_context = f"\nDANH SÁCH NHÂN VIÊN TRONG HỆ THỐNG:\n{emp_info}\n"
 
             system_prompt = f"""Bạn là Trợ lý AI chuyên nghiệp của hệ thống Quản lý Phòng họp.
-Ngày giờ hiện tại: {now_str} (múi giờ Việt Nam)
-Nhiệm vụ: Hỗ trợ nhân viên tìm phòng TRỐNG và ĐẶT PHÒNG thay cho họ.
+Ngày giờ hiện tại: {now_str} (Giờ VN)
+Nhiệm vụ: Tìm phòng và ĐẶT PHÒNG giúp nhân viên.
 
-=== TRẠNG THÁI PHÒNG HỌP (CẬP NHẬT THỰC TẾ TỪ HỆ THỐNG) ===
+=== DỮ LIỆU PHÒNG HỌP & LỊCH BẬN ===
 {phong_info}
-{extra_context}
-=== QUY TRÌNH XỬ LÝ ===
-1. Đọc kỹ danh sách phòng & lịch bận bên trên trước khi gợi ý.
-2. Nếu user hỏi phòng nào trống → dựa vào lịch thực tế bên trên để trả lời chính xác.
-3. Nếu thiếu thông tin (số người, thời gian) → hỏi lại CỤ THỂ từng thứ.
-4. Khi đủ thông tin → kiểm tra xem phòng có bị trùng lịch không → gợi ý phòng phù hợp → hỏi xác nhận:
-   "Tôi sẽ đặt [Tên phòng] từ [HH:MM] đến [HH:MM] ngày [DD/MM] cho [N] người. Bạn xác nhận chứ?"
-5. Nếu user đồng ý (ok, được, đặt đi, xác nhận, ừ, yes...) → xuất JSON:
-   JSON_DATA: {{"phong": "Tên phòng", "nguoi": "", "bat_dau": "YYYY-MM-DD HH:MM:SS", "ket_thuc": "YYYY-MM-DD HH:MM:SS", "so_nguoi": 5, "confirmed": true}}
-6. Nếu chưa xác nhận → KHÔNG xuất JSON_DATA.
 
-LƯU Ý: Lịch bận hiển thị theo giờ VN. Chỉ gợi ý phòng không có lịch trùng với thời gian user yêu cầu.
+=== DỮ LIỆU NHÂN VIÊN ===
+{extra_context}
+
+=== QUY TRÌNH BẮT BUỘC ===
+1. Khi user muốn đặt phòng: 
+   - Kiểm tra xem họ đã nói TÊN NHÂN VIÊN đặt chưa. 
+   - Nếu CHƯA CÓ TÊN, hãy hỏi: "Bạn đặt phòng cho nhân viên tên là gì để tôi kiểm tra?"
+2. Kiểm tra tên nhân viên:
+   - Đối soát tên user cung cấp với danh sách nhân viên bên trên.
+   - Nếu tên KHÔNG CÓ trong danh sách, báo lỗi: "Tên nhân viên [Tên] không tồn tại trên hệ thống."
+3. Yêu cầu xác nhận:
+   - Khi đủ thông tin (Phòng, Giờ, Tên NV), hỏi: "Tôi sẽ đặt [Phòng] cho [Tên NV] lúc [Giờ]. Bạn xác nhận chứ?"
+4. Thực hiện ĐẶT PHÒNG (Khi user nói 'ok', 'đồng ý', 'đặt đi'...):
+   - Bạn PHẢI trả lời xác nhận và LUÔN LUÔN kèm theo thẻ JSON_DATA ở cuối câu.
+   - THẺ JSON BẮT BUỘC:
+     JSON_DATA: {{"phong": "Tên phòng", "nguoi": "Tên nhân viên", "bat_dau": "YYYY-MM-DD HH:MM:SS", "ket_thuc": "YYYY-MM-DD HH:MM:SS", "so_nguoi": 5, "confirmed": true}}
+
+LƯU Ý: Tuyệt đối không tự ý xuất JSON_DATA khi chưa có TÊN NHÂN VIÊN và chưa được user nói 'ok'.
 
 Lịch sử hội thoại:
 {history}"""
