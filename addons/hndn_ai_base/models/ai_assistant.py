@@ -114,7 +114,8 @@ class AIAssistant(models.Model):
                         t_bat_dau = b.thoi_gian_muon_du_kien.replace(tzinfo=pytz.UTC).astimezone(tz).strftime('%d/%m %H:%M')
                         t_ket_thuc = b.thoi_gian_tra_du_kien.replace(tzinfo=pytz.UTC).astimezone(tz).strftime('%H:%M')
                         trang_thai_label = {'chờ_duyệt': 'chờ duyệt', 'đã_duyệt': 'đã đặt', 'đang_sử_dụng': 'đang dùng'}.get(b.trang_thai, b.trang_thai)
-                        lich.append(f"    🔴 {t_bat_dau}–{t_ket_thuc} ({trang_thai_label})")
+                        nguoi_muon = b.nguoi_muon_id.name or "Không rõ"
+                        lich.append(f"    🔴 {t_bat_dau}–{t_ket_thuc}: {nguoi_muon} ({trang_thai_label})")
                     lich_str = "\n".join(lich)
                     phong_info_lines.append(f"  📌 {p.name} | Sức chứa: {p.suc_chua} người\n    Thiết bị:\n{thiet_bi_str}\n    Lịch bận:\n{lich_str}")
                 else:
