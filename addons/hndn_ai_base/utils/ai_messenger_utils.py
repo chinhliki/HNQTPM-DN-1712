@@ -11,26 +11,31 @@ class AIMessengerUtils:
     @staticmethod
     def get_gemini_response(api_key, prompt, image_data=None, image_type='image/jpeg'):
         """
-        Gửi yêu cầu đến Gemini API.
+        Gửi yêu cầu đến Gemini API với cơ chế tự động thử lại (retry) khi bị 503/429.
         """
+        import time
         if not api_key:
             _logger.error("Gemini API Key is missing!")
             return None
         
         api_key = api_key.strip()
         
-        # Sử dụng v1beta và model gemini-flash-latest theo KHỚP CHÍNH XÁC curl của người dùng
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+        # Dùng gemini-1.5-flash (phiên bản ổn định, ít bị 503 hơn 'latest')
+        # Fallback: gemini-1.0-pro nếu 1.5-flash tiếp tục quá tải
+        MODELS_TO_TRY = [
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.0-pro",
+        ]
+        
         headers = {
             'Content-Type': 'application/json',
             'X-goog-api-key': api_key
         }
         parts = [{"text": prompt}]
         if image_data:
-            # Nếu là byte, chuyển sang base64 string
             if not isinstance(image_data, str):
                 image_data = base64.b64encode(image_data).decode('utf-8')
-            
             parts.append({
                 "inline_data": {
                     "mime_type": image_type,
@@ -39,28 +44,40 @@ class AIMessengerUtils:
             })
         data = {"contents": [{"parts": parts}]}
         
-        try:
-            _logger.info(f"Calling Gemini API with URL: {url}")
-            response = requests.post(url, headers=headers, json=data, timeout=30)
-            _logger.info(f"Gemini API Response Status: {response.status_code}")
-            
-            if response.status_code != 200:
-                _logger.error(f"Gemini API Error {response.status_code}: {response.text}")
-                return None
-            result = response.json()
-            if 'candidates' in result and result['candidates']:
-                return result['candidates'][0]['content']['parts'][0]['text']
-            
-            if 'error' in result:
-                _logger.error(f"Gemini API returned an error: {result['error']}")
-            else:
-                _logger.warning(f"Gemini returned no candidates: {result}")
-            return None
-        except Exception as e:
-            _logger.error(f"Unexpected error calling Gemini API: {str(e)}")
-            import traceback
-            _logger.error(traceback.format_exc())
-            return None
+        for model in MODELS_TO_TRY:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            MAX_RETRIES = 3
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    _logger.info(f"Calling Gemini [{model}] - Attempt {attempt}/{MAX_RETRIES}")
+                    response = requests.post(url, headers=headers, json=data, timeout=30)
+                    _logger.info(f"Gemini API Response Status: {response.status_code}")
+                    
+                    # Thành công
+                    if response.status_code == 200:
+                        result = response.json()
+                        if 'candidates' in result and result['candidates']:
+                            return result['candidates'][0]['content']['parts'][0]['text']
+                        _logger.warning(f"Gemini [{model}] returned no candidates: {result}")
+                        return None
+                    
+                    # 503 / 429: Server quá tải → đợi rồi thử lại
+                    if response.status_code in (503, 429):
+                        wait_sec = 2 * attempt  # 2s, 4s, 6s
+                        _logger.warning(f"Gemini [{model}] {response.status_code} - Retrying in {wait_sec}s...")
+                        time.sleep(wait_sec)
+                        continue
+                    
+                    # Lỗi khác → thử model tiếp theo
+                    _logger.error(f"Gemini [{model}] Error {response.status_code}: {response.text}")
+                    break
+
+                except Exception as e:
+                    _logger.error(f"Gemini [{model}] Exception: {str(e)}")
+                    break
+        
+        _logger.error("Tất cả model Gemini đều không phản hồi được. Vui lòng thử lại sau.")
+        return None
 
     @staticmethod
     def send_telegram_notification(token, chat_id, message):
