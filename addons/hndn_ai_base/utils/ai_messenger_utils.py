@@ -3,64 +3,89 @@ import requests
 import json
 import base64
 import logging
+import time
 
 _logger = logging.getLogger(__name__)
 
 class AIMessengerUtils:
-    
+
+    # ✅ Cấu hình chuẩn: v1 + gemini-2.5-flash
+    GEMINI_MODEL = "gemini-2.5-flash"
+    GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/{model}:generateContent"
+
     @staticmethod
     def get_gemini_response(api_key, prompt, image_data=None, image_type='image/jpeg'):
         """
-        Gửi yêu cầu đến Gemini API.
+        Gửi yêu cầu đến Gemini API với retry tự động.
+        - Endpoint: v1 (ổn định)
+        - Model: gemini-2.5-flash
+        - Xử lý lỗi: 400, 404, 429 (quota)
         """
         if not api_key:
             _logger.error("Gemini API Key is missing!")
             return None
-        
+
         api_key = api_key.strip()
-        
-        # Gemini 2.5 Flash Preview - model mới nhất, thông minh nhất hiện tại
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent"
-        headers = {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': api_key
-        }
+        url = AIMessengerUtils.GEMINI_API_URL.format(model=AIMessengerUtils.GEMINI_MODEL)
+
+        headers = {"Content-Type": "application/json"}
+        params = {"key": api_key}  # ✅ API key qua params, không để trong header
+
         parts = [{"text": prompt}]
         if image_data:
-            # Nếu là byte, chuyển sang base64 string
             if not isinstance(image_data, str):
                 image_data = base64.b64encode(image_data).decode('utf-8')
-            
             parts.append({
                 "inline_data": {
                     "mime_type": image_type,
                     "data": image_data
                 }
             })
-        data = {"contents": [{"parts": parts}]}
-        
-        try:
-            _logger.info(f"Calling Gemini API with URL: {url}")
-            response = requests.post(url, headers=headers, json=data, timeout=30)
-            _logger.info(f"Gemini API Response Status: {response.status_code}")
-            
-            if response.status_code != 200:
-                _logger.error(f"Gemini API Error {response.status_code}: {response.text}")
+
+        payload = {"contents": [{"parts": parts}]}
+
+        # Retry tối đa 2 lần (xử lý 429 quota tạm thời)
+        for attempt in range(3):
+            try:
+                _logger.info(f"Calling Gemini API [{AIMessengerUtils.GEMINI_MODEL}] - Attempt {attempt + 1}")
+                response = requests.post(url, headers=headers, params=params, json=payload, timeout=30)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if 'candidates' in result and result['candidates']:
+                        return result['candidates'][0]['content']['parts'][0]['text']
+                    _logger.warning(f"Gemini returned no candidates: {result}")
+                    return None
+
+                elif response.status_code == 429:
+                    # Quota exceeded - đợi rồi thử lại
+                    wait = 2 ** attempt  # 1s, 2s, 4s
+                    _logger.warning(f"Gemini quota exceeded (429), retrying in {wait}s...")
+                    time.sleep(wait)
+                    continue
+
+                elif response.status_code == 404:
+                    _logger.error(f"Gemini model not found (404): {AIMessengerUtils.GEMINI_MODEL}")
+                    return None
+
+                else:
+                    _logger.error(f"Gemini API Error {response.status_code}: {response.text}")
+                    return None
+
+            except requests.exceptions.Timeout:
+                _logger.error(f"Gemini API timeout (attempt {attempt + 1})")
+                if attempt < 2:
+                    time.sleep(1)
+                    continue
                 return None
-            result = response.json()
-            if 'candidates' in result and result['candidates']:
-                return result['candidates'][0]['content']['parts'][0]['text']
-            
-            if 'error' in result:
-                _logger.error(f"Gemini API returned an error: {result['error']}")
-            else:
-                _logger.warning(f"Gemini returned no candidates: {result}")
-            return None
-        except Exception as e:
-            _logger.error(f"Unexpected error calling Gemini API: {str(e)}")
-            import traceback
-            _logger.error(traceback.format_exc())
-            return None
+            except Exception as e:
+                _logger.error(f"Unexpected error calling Gemini API: {str(e)}")
+                import traceback
+                _logger.error(traceback.format_exc())
+                return None
+
+        _logger.error("Gemini API failed after 3 attempts")
+        return None
 
     @staticmethod
     def send_telegram_notification(token, chat_id, message):
