@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from odoo import models, fields, api
 
 class AIAssistant(models.Model):
@@ -21,6 +22,45 @@ class AIAssistant(models.Model):
     so_luong_nguoi = fields.Integer(string="Số người")
     dat_phong_id = fields.Many2one("dat_phong", string="Đơn đặt phòng đã tạo", readonly=True)
 
+    @staticmethod
+    def _format_ai_response(text):
+        """
+        Chuyển đổi text thuần từ Gemini thành HTML dễ đọc trong bubble chat.
+        Xử lý: xuống dòng, in đậm (**text**), danh sách gạch đầu dòng (- item), emoji giữ nguyên.
+        """
+        if not text:
+            return text
+
+        # Escape HTML cơ bản để tránh XSS (trừ các tag sẽ tự thêm)
+        text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+        # In đậm **text** → <b>text</b>
+        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+
+        # In nghiêng *text* (không phải **) → <i>text</i>
+        text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', text)
+
+        # Xử lý từng dòng
+        lines = text.split('\n')
+        result_lines = []
+        for line in lines:
+            stripped = line.strip()
+            # Dòng bắt đầu bằng "- " hoặc "• " → bullet point
+            if re.match(r'^[-•] ', stripped):
+                content = stripped[2:]
+                result_lines.append(f'<div style="margin:2px 0; padding-left:12px;">• {content}</div>')
+            # Dòng bắt đầu bằng số "1. ", "2. " → numbered list
+            elif re.match(r'^\d+\. ', stripped):
+                result_lines.append(f'<div style="margin:2px 0; padding-left:12px;">{stripped}</div>')
+            # Dòng trống → khoảng cách nhỏ
+            elif stripped == '':
+                result_lines.append('<div style="height:6px;"></div>')
+            # Dòng bình thường
+            else:
+                result_lines.append(f'<div>{stripped}</div>')
+
+        return '\n'.join(result_lines)
+
     def action_ask_ai(self):
         import json
         from datetime import datetime as dt
@@ -41,10 +81,46 @@ class AIAssistant(models.Model):
                 continue
             question = last_user_msg.content
 
-            # 3. NGUỔN DỮ LIỆU THỰC TẼ: Danh sách phòng và giờ hiện tại
+            # 3. DỮ LIỆU THỰC TẾ: Phòng + Lịch đặt đang hoạt động
+            from datetime import datetime as dt_now, timedelta
+            now = dt_now.now()
+            now_str = now.strftime('%d/%m/%Y %H:%M')
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = today_start + timedelta(days=7)  # Hiển thị lịch 7 ngày tới
+
             phong_list = self.env['quan_ly_phong_hop'].search([])
-            phong_info = "\n".join([f"  - {p.name} (Sức chứa: {p.suc_chua})" for p in phong_list]) or "  (Chưa có phòng nào)"
-            now_str = dt.now().strftime('%d/%m/%Y %H:%M')
+            phong_info_lines = []
+            for p in phong_list:
+                # Lấy các đơn đặt đang active trong 7 ngày tới của phòng này
+                bookings = self.env['dat_phong'].search([
+                    ('phong_id', '=', p.id),
+                    ('trang_thai', 'in', ['đã_duyệt', 'đang_sử_dụng', 'chờ_duyệt']),
+                    ('thoi_gian_tra_du_kien', '>=', now),
+                    ('thoi_gian_muon_du_kien', '<=', today_end),
+                ], order='thoi_gian_muon_du_kien asc')
+
+                # Lấy danh sách thiết bị
+                thiet_bi = []
+                for tb in p.thiet_bi_ids:
+                    status_icon = "✅" if tb.trang_thai == 'san_sang' else "🛠"
+                    thiet_bi.append(f"      {status_icon} {tb.name} (SL: {tb.so_luong})")
+                thiet_bi_str = "\n".join(thiet_bi) if thiet_bi else "      (Không có thiết bị)"
+
+                if bookings:
+                    lich = []
+                    for b in bookings:
+                        import pytz
+                        tz = pytz.timezone('Asia/Ho_Chi_Minh')
+                        t_bat_dau = b.thoi_gian_muon_du_kien.replace(tzinfo=pytz.UTC).astimezone(tz).strftime('%d/%m %H:%M')
+                        t_ket_thuc = b.thoi_gian_tra_du_kien.replace(tzinfo=pytz.UTC).astimezone(tz).strftime('%H:%M')
+                        trang_thai_label = {'chờ_duyệt': 'chờ duyệt', 'đã_duyệt': 'đã đặt', 'đang_sử_dụng': 'đang dùng'}.get(b.trang_thai, b.trang_thai)
+                        lich.append(f"    🔴 {t_bat_dau}–{t_ket_thuc} ({trang_thai_label})")
+                    lich_str = "\n".join(lich)
+                    phong_info_lines.append(f"  📌 {p.name} | Sức chứa: {p.suc_chua} người\n    Thiết bị:\n{thiet_bi_str}\n    Lịch bận:\n{lich_str}")
+                else:
+                    phong_info_lines.append(f"  ✅ {p.name} | Sức chứa: {p.suc_chua} người | Trống hoàn toàn\n    Thiết bị:\n{thiet_bi_str}")
+
+            phong_info = "\n".join(phong_info_lines) or "  (Chưa có phòng nào trong hệ thống)"
 
             # 4. Ngữ cảnh bổ sung theo từ khóa
             extra_context = ""
@@ -53,21 +129,26 @@ class AIAssistant(models.Model):
                 emp_info = "\n".join([f"- {e.name}" for e in employees])
                 extra_context += f"\nDanh sách một số nhân viên:\n{emp_info}\n"
 
-            system_prompt = f"""Bạn là Trợ lý AI chuyên nghiệp của hệ thống Quản lý Phòng hỏp.
-Ngày giờ hiện tại: {now_str}
-Nhiệm vụ: Hỗ trợ nhân viên tìm và đặt phòng hỏp phù hợp.
+            system_prompt = f"""Bạn là Trợ lý AI chuyên nghiệp của hệ thống Quản lý Phòng họp.
+Ngày giờ hiện tại: {now_str} (múi giờ Việt Nam)
+Nhiệm vụ: Hỗ trợ nhân viên tìm phòng TRỐNG và ĐẶT PHÒNG thay cho họ.
 
-Danh sách phòng hỏp hiện có:
+=== TRẠNG THÁI PHÒNG HỌP (CẬP NHẬT THỰC TẾ TỪ HỆ THỐNG) ===
 {phong_info}
 {extra_context}
-Quy trình:
-1. Tiếp nhận yêu cầu từ người dùng.
-2. Nếu thiếu thông tin (số người, thời gian, mục đích), hỏi lại lịch sự.
-3. Gợi ý phòng phù hợp theo sức chứa.
-4. Khi đủ thông tin, nhận xét tóm tắt và thêm đúng 1 dòng cuối:
-   JSON_DATA: {{"phong": "Tên phòng", "nguoi": "Tên người mượn nếu có", "bat_dau": "YYYY-MM-DD HH:MM:SS", "ket_thuc": "YYYY-MM-DD HH:MM:SS", "so_nguoi": 5}}
+=== QUY TRÌNH XỬ LÝ ===
+1. Đọc kỹ danh sách phòng & lịch bận bên trên trước khi gợi ý.
+2. Nếu user hỏi phòng nào trống → dựa vào lịch thực tế bên trên để trả lời chính xác.
+3. Nếu thiếu thông tin (số người, thời gian) → hỏi lại CỤ THỂ từng thứ.
+4. Khi đủ thông tin → kiểm tra xem phòng có bị trùng lịch không → gợi ý phòng phù hợp → hỏi xác nhận:
+   "Tôi sẽ đặt [Tên phòng] từ [HH:MM] đến [HH:MM] ngày [DD/MM] cho [N] người. Bạn xác nhận chứ?"
+5. Nếu user đồng ý (ok, được, đặt đi, xác nhận, ừ, yes...) → xuất JSON:
+   JSON_DATA: {{"phong": "Tên phòng", "nguoi": "", "bat_dau": "YYYY-MM-DD HH:MM:SS", "ket_thuc": "YYYY-MM-DD HH:MM:SS", "so_nguoi": 5, "confirmed": true}}
+6. Nếu chưa xác nhận → KHÔNG xuất JSON_DATA.
 
-Dựa trên lịch sử hội thoại:
+LƯU Ý: Lịch bận hiển thị theo giờ VN. Chỉ gợi ý phòng không có lịch trùng với thời gian user yêu cầu.
+
+Lịch sử hội thoại:
 {history}"""
 
             from odoo.addons.hndn_ai_base.utils.ai_messenger_utils import AIMessengerUtils
@@ -77,18 +158,29 @@ Dựa trên lịch sử hội thoại:
                 # Tách phần text sạch (bỏ JSON nếu có)
                 clean_text = response.split("JSON_DATA:")[0].strip() if "JSON_DATA:" in response else response
 
+                # ✅ Format đẹp: xuống dòng, in đậm, bullet list → HTML
+                formatted_text = self._format_ai_response(clean_text)
+
                 self.env['ai_chat_message'].create({
                     'session_id': rec.id,
                     'role': 'assistant',
-                    'content': clean_text
+                    'content': formatted_text
                 })
-                rec.answer = clean_text
+                rec.answer = clean_text  # Lưu dạng thuần cho field answer
 
-                # Trích xuất JSON để tự động điền thông tin đặt phòng
-                rec._process_booking_data(response)
+                # Trích xuất JSON và tự động đặt phòng nếu user đã xác nhận
+                booking_created = rec._process_booking_data(response)
+
+                if booking_created:
+                    # AI vừa tạo đơn thành công — thông báo ngay trong chat
+                    self.env['ai_chat_message'].create({
+                        'session_id': rec.id,
+                        'role': 'assistant',
+                        'content': f"✅ Đã đặt phòng thành công! Đơn mượn đang chờ phê duyệt từ quản lý."
+                    })
 
                 # Câu hỏi gợi ý cho lần sau
-                suggestions = ["Phòng nào có sức chứa lớn nhất?", "Đặt phòng khác", "Hủy đặt phòng", "Xem lịch sử đặt"]
+                suggestions = ["Đặt phòng khác", "Xem phòng nào còn trống", "Hủy đặt phòng", "Xem lịch sử đặt"]
                 import json
                 rec.suggested_questions = json.dumps(suggestions, ensure_ascii=False)
             else:
@@ -100,11 +192,14 @@ Dựa trên lịch sử hội thoại:
                 rec.answer = "Đã có lỗi xảy ra khi kết nối với AI."
 
     def _process_booking_data(self, text):
-        """Tự động trích xuất và lưu thông tin đặt phòng từ JSON AI trả về"""
+        """Tự động trích xuất thông tin và ĐẶT PHÒNG luôn nếu user đã xác nhận (confirmed=true)"""
         import json
+        import logging
         from datetime import datetime as dt
+        _logger = logging.getLogger(__name__)
+
         if "JSON_DATA:" not in text:
-            return
+            return False
         try:
             json_raw = text.split("JSON_DATA:")[1].strip()
             json_raw = json_raw.replace('```json', '').replace('```', '').strip()
@@ -113,6 +208,8 @@ Dựa trên lịch sử hội thoại:
                 json_raw = json_raw[:end + 1]
             data = json.loads(json_raw)
 
+            # Điền thông tin vào record
+            phong = None
             if data.get('phong'):
                 phong = self.env['quan_ly_phong_hop'].search([('name', 'ilike', data['phong'])], limit=1)
                 if phong:
@@ -129,9 +226,36 @@ Dựa trên lịch sử hội thoại:
                 self.thoi_gian_tra = dt.strptime(data['ket_thuc'], '%Y-%m-%d %H:%M:%S')
 
             self.so_luong_nguoi = int(data.get('so_nguoi', 0))
+
+            # ✅ TỰ ĐỘNG ĐẶT PHÒNG nếu user đã xác nhận (confirmed=true)
+            if data.get('confirmed') and self.phong_id and self.thoi_gian_muon and self.thoi_gian_tra:
+                vals = {
+                    'phong_id': self.phong_id.id,
+                    'thoi_gian_muon_du_kien': self.thoi_gian_muon,
+                    'thoi_gian_tra_du_kien': self.thoi_gian_tra,
+                    'so_luong_nguoi': self.so_luong_nguoi or 1,
+                    'trang_thai': 'chờ_duyệt',
+                    'ai_session_id': self.id,  # ✅ Liên kết với phiên chat này
+                }
+                # Ưu tiên người mượn từ chat, nếu không có thì dùng user hiện tại
+                if self.nguoi_muon_id:
+                    vals['nguoi_muon_id'] = self.nguoi_muon_id.id
+                else:
+                    nv = self.env['nhan_vien'].search([('user_id', '=', self.env.uid)], limit=1)
+                    if nv:
+                        vals['nguoi_muon_id'] = nv.id
+
+                booking = self.env['dat_phong'].create(vals)
+                self.dat_phong_id = booking.id
+                _logger.info(f"AI auto-created booking #{booking.id} for room {self.phong_id.name}")
+                return True  # Báo hiệu đã tạo đơn thành công
+
+            return False  # Chưa xác nhận, chỉ lưu thông tin tạm
+
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f"Parse booking JSON error: {e}")
+            return False
 
     def action_confirm_booking(self):
         """Tạo đơn đặt phòng từ thông tin AI đã trích xuất"""
@@ -148,6 +272,7 @@ Dựa trên lịch sử hội thoại:
             'thoi_gian_tra_du_kien': self.thoi_gian_tra,
             'so_luong_nguoi': self.so_luong_nguoi or 1,
             'trang_thai': 'chờ_duyệt',
+            'ai_session_id': self.id,  # ✅ Liên kết với phiên chat này
         }
         if self.nguoi_muon_id:
             vals['nguoi_muon_id'] = self.nguoi_muon_id.id

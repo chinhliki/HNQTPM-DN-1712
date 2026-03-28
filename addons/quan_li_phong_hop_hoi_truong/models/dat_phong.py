@@ -27,6 +27,9 @@ class DatPhong(models.Model):
     ], string="Trạng thái", default="chờ_duyệt", index=True)
     lich_su_ids = fields.One2many("lich_su_thay_doi", "dat_phong_id", string="Lịch sử mượn trả")
     chi_tiet_su_dung_ids = fields.One2many("dat_phong", "phong_id", string="Chi Tiết Sử Dụng", domain=[("trang_thai", "in", ["đang_sử_dụng", "đã_trả"])])
+    
+    # --- LIÊN KẾT AI ---
+    ai_session_id = fields.Many2one("ai_assistant", string="Phiên Chat AI tạo đơn", ondelete="set null")
 
     # --- NÂNG CẤP: THÊM DỮ LIỆU CHO AI ---
     so_luong_nguoi = fields.Integer("Số lượng người tham gia", default=1)
@@ -139,6 +142,7 @@ class DatPhong(models.Model):
                 f"🔔 Trạng thái: Đã duyệt và sẵn sàng sử dụng."
             )
             self._send_telegram_notification(msg)
+            self._notify_ai_session(record, f"✅ Đơn đặt phòng **{record.phong_id.name}** của bạn đã được **phê duyệt**.")
             
             cung_phong_trung_thoi_gian = [
                 ('phong_id', '=', record.phong_id.id),
@@ -189,6 +193,8 @@ class DatPhong(models.Model):
                 f"🛑 Trạng thái: Yêu cầu đã bị hủy bỏ."
             )
             self._send_telegram_notification(msg)
+            self._notify_ai_session(record, f"🛑 Rất tiếc, yêu cầu đặt phòng **{record.phong_id.name}** của bạn đã bị **từ chối/hủy bỏ**.")
+            self._notify_ai_session(record, f"🛑 Rất tiếc, yêu cầu đặt phòng **{record.phong_id.name}** của bạn đã bị **từ chối/hủy bỏ**.")
 
     def huy_da_duyet(self):
         for record in self:
@@ -205,6 +211,7 @@ class DatPhong(models.Model):
                 f"🛑 Trạng thái: Lịch phòng đã bị hủy giữa chừng."
             )
             self._send_telegram_notification(msg)
+            self._notify_ai_session(record, f"⚠️ Lịch phòng **{record.phong_id.name}** đã được duyệt của bạn vừa bị **hủy bỏ**.")
 
     def bat_dau_su_dung(self):
         for record in self:
@@ -284,6 +291,7 @@ class DatPhong(models.Model):
             f"✅ Trạng thái: Phòng dọn xong, thiết bị trả đủ."
         )
         self._send_telegram_notification(msg)
+        self._notify_ai_session(record, f"🏠 Bạn đã **trả phòng {record.phong_id.name}** thành công. Cảm ơn bạn!")
 
         return {
             'type': 'ir.actions.client',
@@ -329,6 +337,18 @@ class DatPhong(models.Model):
         except requests.exceptions.RequestException as e:
             # Ghi log ẩn thay vì báo lỗi popup để không làm gián đoạn trải nghiệm người dùng Odoo
             pass
+
+    def _notify_ai_session(self, record, message):
+        """ Gửi thông báo ngược lại phiên chat AI nếu đơn được tạo từ AI """
+        if record.ai_session_id:
+            try:
+                self.env['ai_chat_message'].sudo().create({
+                    'session_id': record.ai_session_id.id,
+                    'role': 'assistant',
+                    'content': message
+                })
+            except Exception:
+                pass
 
 class ChiTietMuonThietBi(models.Model):
     _name = "chi_tiet_muon_thiet_bi"
